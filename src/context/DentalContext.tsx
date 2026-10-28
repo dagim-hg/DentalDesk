@@ -8,6 +8,7 @@ import {
   INITIAL_VISITS, INITIAL_SERVICE_CATALOG, INITIAL_INVOICES, 
   INITIAL_PAYMENTS, INITIAL_INVENTORY, INITIAL_AUDIT_LOGS 
 } from '../data/mockData';
+import { api } from '../services/api';
 
 interface DentalContextType {
   currentUser: User;
@@ -49,6 +50,10 @@ interface DentalContextType {
   exportDatabaseBackup: () => void;
   restoreDatabaseBackup: (jsonContent: string) => boolean;
   resetToFactoryDefaults: () => void;
+
+  // Server Connection Status
+  isServerConnected: boolean;
+  refreshFromBackend: () => Promise<void>;
 
   // Permissions helper
   hasPermission: (action: 'CLINICAL_WRITE' | 'BILLING_MANAGE' | 'INVENTORY_MANAGE' | 'ADMIN_OPERATIONS') => boolean;
@@ -104,6 +109,47 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const saved = localStorage.getItem(`${STORAGE_KEY}_audit`);
     return saved ? JSON.parse(saved) : INITIAL_AUDIT_LOGS;
   });
+
+  const [isServerConnected, setIsServerConnected] = useState<boolean>(false);
+
+  // Initial and periodic sync with PostgreSQL backend
+  const refreshFromBackend = async () => {
+    try {
+      const isUp = await api.checkHealth();
+      setIsServerConnected(isUp);
+      if (isUp) {
+        const [pts, appts, vsts, invs, pmts, invItems, logs] = await Promise.all([
+          api.getPatients(),
+          api.getAppointments(),
+          api.getVisits(),
+          api.getInvoices(),
+          api.getPayments(),
+          api.getInventory(),
+          api.getAuditLogs()
+        ]);
+        if (pts && pts.length > 0) {
+          setPatients(pts);
+          setSelectedPatient(prev => prev || pts[0]);
+        }
+        if (appts) setAppointments(appts);
+        if (vsts) setVisits(vsts);
+        if (invs) setInvoices(invs);
+        if (pmts) setPayments(pmts);
+        if (invItems) setInventory(invItems);
+        if (logs) setAuditLogs(logs);
+      }
+    } catch (e) {
+      console.warn('Backend unavailable, operating on local cache:', e);
+      setIsServerConnected(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshFromBackend();
+    // Periodically poll backend every 5 seconds for multi-device sync
+    const interval = setInterval(refreshFromBackend, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Sync to local storage
   useEffect(() => {
@@ -191,6 +237,14 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setPatients(prev => [newPatient, ...prev]);
     setSelectedPatient(newPatient);
     logAudit('CREATE', 'Patient', patientCode, `Created record for ${newPatient.firstName} ${newPatient.lastName}`);
+
+    if (isServerConnected) {
+      api.createPatient(patientData).then(serverPatient => {
+        setPatients(prev => prev.map(p => p.id === nextId ? serverPatient : p));
+        setSelectedPatient(serverPatient);
+      }).catch(err => console.error('Failed to sync patient to server:', err));
+    }
+
     return newPatient;
   };
 
@@ -207,6 +261,10 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return p;
     }));
     logAudit('UPDATE', 'Patient', id, `Updated patient profile ID ${id}`);
+
+    if (isServerConnected) {
+      api.updatePatient(id, data).catch(err => console.error('Failed to sync patient update:', err));
+    }
     return true;
   };
 
@@ -243,12 +301,23 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     setAppointments(prev => [...prev, newApp]);
     logAudit('CREATE', 'Appointment', nextId, `Booked ${newApp.operatoryChair} for patient #${data.patientId}`);
+
+    if (isServerConnected) {
+      api.bookAppointment(data).then(serverApp => {
+        setAppointments(prev => prev.map(a => a.id === nextId ? serverApp : a));
+      }).catch(err => console.error('Failed to sync appointment to server:', err));
+    }
+
     return { success: true };
   };
 
   const updateAppointmentStatus = (id: number, status: AppointmentStatus) => {
     setAppointments(prev => prev.map(a => a.id === id ? { ...a, status, version: a.version + 1 } : a));
     logAudit('UPDATE', 'Appointment', id, `Changed appointment status to ${status}`);
+
+    if (isServerConnected) {
+      api.updateAppointmentStatus(id, status).catch(err => console.error('Failed to sync status:', err));
+    }
   };
 
   // Clinical Visits & Odontogram
@@ -262,6 +331,13 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     setVisits(prev => [newVisit, ...prev]);
     logAudit('CREATE', 'ClinicalVisit', nextId, `Logged clinical examination & odontogram for patient #${visitData.patientId}`);
+
+    if (isServerConnected) {
+      api.saveVisit(visitData).then(serverVisit => {
+        setVisits(prev => prev.map(v => v.id === nextId ? serverVisit : v));
+      }).catch(err => console.error('Failed to sync visit to server:', err));
+    }
+
     return newVisit;
   };
 
@@ -297,6 +373,13 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     setInvoices(prev => [newInvoice, ...prev]);
     logAudit('CREATE', 'Invoice', invoiceNumber, `Generated invoice for total $${newInvoice.totalAmount}`);
+
+    if (isServerConnected) {
+      api.createInvoice(data).then(serverInv => {
+        setInvoices(prev => prev.map(i => i.id === nextId ? serverInv : i));
+      }).catch(err => console.error('Failed to sync invoice to server:', err));
+    }
+
     return newInvoice;
   };
 
@@ -328,6 +411,11 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }));
 
     logAudit('PAYMENT', 'Payment', receiptNumber, `Received payment $${newPayment.amount} via ${newPayment.paymentMethod}`);
+
+    if (isServerConnected) {
+      api.recordPayment(paymentData).catch(err => console.error('Failed to sync payment to server:', err));
+    }
+
     return newPayment;
   };
 
@@ -335,6 +423,10 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const updateInventoryStock = (id: number, newStock: number) => {
     setInventory(prev => prev.map(item => item.id === id ? { ...item, currentStock: newStock } : item));
     logAudit('UPDATE', 'InventoryItem', id, `Updated stock level to ${newStock}`);
+
+    if (isServerConnected) {
+      api.updateInventoryStock(id, newStock).catch(err => console.error('Failed to sync inventory to server:', err));
+    }
   };
 
   // Disaster Recovery: Export & Restore Local LAN Snapshots
@@ -429,6 +521,8 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       exportDatabaseBackup,
       restoreDatabaseBackup,
       resetToFactoryDefaults,
+      isServerConnected,
+      refreshFromBackend,
       hasPermission
     }}>
       {children}

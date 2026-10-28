@@ -10,7 +10,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenBackup }) => {
-  const { currentUser, setCurrentUser, users, appointments, exportDatabaseBackup } = useDental();
+  const { currentUser, setCurrentUser, users, appointments, exportDatabaseBackup, isServerConnected } = useDental();
   const [time, setTime] = useState(new Date().toLocaleTimeString());
 
   useEffect(() => {
@@ -51,11 +51,16 @@ export const Header: React.FC<HeaderProps> = ({ onOpenBackup }) => {
           </div>
         )}
 
-        {/* Air-gapped LAN indicator */}
-        <div className="status-pill" title="Running completely offline over clinic Wi-Fi / LAN">
-          <span className="status-dot active"></span>
-          <Wifi size={14} color="var(--success)" />
-          <span style={{ color: 'var(--text-secondary)' }}>LAN Autonomous</span>
+        {/* PostgreSQL Database status indicator */}
+        <div 
+          className="status-pill" 
+          title={isServerConnected ? "Connected live to local PostgreSQL 18 server" : "Operating on local offline cache"}
+        >
+          <span className={`status-dot ${isServerConnected ? 'active' : 'warning'}`}></span>
+          <Wifi size={14} color={isServerConnected ? "var(--success)" : "var(--warning)"} />
+          <span style={{ color: isServerConnected ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+            {isServerConnected ? 'PostgreSQL 18 Live' : 'Offline Cache'}
+          </span>
         </div>
 
         {/* Live Clinic Clock */}
