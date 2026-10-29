@@ -1,7 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../db/pool.js';
+import { requireAuth, requireRole } from '../auth/middleware.js';
 
 export const visitsRouter = Router();
+
+// Protect all clinical visit routes - Receptionist has NO access to clinical records per SRS Section 6
+visitsRouter.use(requireRole(['ROLE_OWNER', 'ROLE_DENTIST', 'ROLE_ASSISTANT', 'ROLE_ADMIN']));
 
 // GET /api/visits - Get visits (optional filter ?patientId=123)
 visitsRouter.get('/', async (req: Request, res: Response) => {
@@ -57,7 +61,6 @@ visitsRouter.get('/', async (req: Request, res: Response) => {
 visitsRouter.get('/odontogram/:patientId', async (req: Request, res: Response) => {
   try {
     const { patientId } = req.params;
-    // Get latest tooth record for each tooth number
     const sql = `
       SELECT DISTINCT ON (tooth_number)
         tooth_number AS "toothNumber",
@@ -78,8 +81,8 @@ visitsRouter.get('/odontogram/:patientId', async (req: Request, res: Response) =
   }
 });
 
-// POST /api/visits - Save clinical visit with odontogram changes (Transaction)
-visitsRouter.post('/', async (req: Request, res: Response) => {
+// POST /api/visits - Save clinical visit (Dentist or Owner ONLY per SRS)
+visitsRouter.post('/', requireRole(['ROLE_DENTIST', 'ROLE_OWNER']), async (req: Request, res: Response) => {
   const client = await pool.connect();
   try {
     const data = req.body;
@@ -95,7 +98,7 @@ visitsRouter.post('/', async (req: Request, res: Response) => {
     const visitValues = [
       data.appointmentId || null,
       data.patientId,
-      data.dentistId || null,
+      data.dentistId || (req.user ? req.user.id : null),
       data.visitDatetime || new Date().toISOString(),
       data.chiefComplaint || '',
       data.clinicalNotes || '',
@@ -140,10 +143,12 @@ visitsRouter.post('/', async (req: Request, res: Response) => {
     }
 
     // Audit log
+    const actorName = req.user ? req.user.fullName : 'Authorized Clinician';
+    const actorId = req.user ? req.user.id : null;
     await client.query(
-      `INSERT INTO audit_logs (user_name, action_type, entity_name, entity_id, details)
-       VALUES ($1, 'CREATE', 'ClinicalVisit', $2, $3)`,
-      ['Lead Dentist', newVisit.id, `Saved clinical visit notes & updated ${savedToothRecords.length} teeth for patient ${data.patientId}`]
+      `INSERT INTO audit_logs (user_id, user_name, action_type, entity_name, entity_id, details)
+       VALUES ($1, $2, 'CREATE', 'ClinicalVisit', $3, $4)`,
+      [actorId, actorName, newVisit.id, `Saved clinical visit SOAP notes & updated ${savedToothRecords.length} tooth records for patient #${data.patientId}`]
     );
 
     await client.query('COMMIT');

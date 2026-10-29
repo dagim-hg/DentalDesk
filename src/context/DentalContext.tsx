@@ -1,20 +1,44 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { 
   User, Patient, Appointment, AppointmentStatus, ClinicalVisit, ToothRecord, 
-  ServiceItem, Invoice, Payment, InventoryItem, AuditLog, UserRole 
+  ServiceItem, Invoice, Payment, InventoryItem, AuditLog, UserRole,
+  FinancialReportData
 } from '../types/dental';
 import { 
   INITIAL_USERS, INITIAL_PATIENTS, INITIAL_APPOINTMENTS, 
   INITIAL_VISITS, INITIAL_SERVICE_CATALOG, INITIAL_INVOICES, 
   INITIAL_PAYMENTS, INITIAL_INVENTORY, INITIAL_AUDIT_LOGS 
 } from '../data/mockData';
-import { api } from '../services/api';
+import { api, tokenStorage } from '../services/api';
+
+export type PermissionAction = 
+  | 'MANAGE_STAFF'
+  | 'VIEW_FINANCIALS'
+  | 'EDIT_SERVICE_FEES'
+  | 'CLINICAL_WRITE'
+  | 'VIEW_CLINICAL_NOTES'
+  | 'BILLING_MANAGE'
+  | 'RECORD_PAYMENT'
+  | 'SCHEDULE_MANAGE'
+  | 'INVENTORY_MANAGE'
+  | 'ADMIN_OPERATIONS';
 
 interface DentalContextType {
+  // Authentication & Session
   currentUser: User;
   setCurrentUser: (user: User) => void;
-  users: User[];
+  isAuthenticated: boolean;
+  login: (username: string, password?: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => void;
+  switchUserDemo: (user: User) => Promise<void>;
   
+  // Users & Staff
+  users: User[];
+  staffUsers: User[];
+  refreshStaffUsers: () => Promise<void>;
+  createStaffUser: (userData: any) => Promise<User>;
+  updateStaffUser: (id: number, data: any) => Promise<User>;
+
   // Patients
   patients: Patient[];
   addPatient: (patient: Omit<Patient, 'id' | 'patientCode' | 'version' | 'createdAt' | 'updatedAt'>) => Patient;
@@ -35,16 +59,21 @@ interface DentalContextType {
 
   // Catalog, Billing & Cash Drawer
   serviceCatalog: ServiceItem[];
+  updateServiceFee: (id: number, price: number) => Promise<void>;
   invoices: Invoice[];
   createInvoice: (data: Omit<Invoice, 'id' | 'invoiceNumber' | 'version' | 'createdAt'>) => Invoice;
   payments: Payment[];
   recordPayment: (paymentData: Omit<Payment, 'id' | 'receiptNumber'>) => Payment;
+
+  // Executive Reports (Owner)
+  financialReports: FinancialReportData | null;
+  refreshFinancialReports: () => Promise<void>;
   
   // Inventory
   inventory: InventoryItem[];
   updateInventoryStock: (id: number, newStock: number) => void;
 
-  // Audits & Backup/Restore (FR-OPS & FR-AUDIT)
+  // Audits & Backup/Restore
   auditLogs: AuditLog[];
   logAudit: (actionType: AuditLog['actionType'], entityName: string, entityId: string | number, details: string) => void;
   exportDatabaseBackup: () => void;
@@ -56,7 +85,7 @@ interface DentalContextType {
   refreshFromBackend: () => Promise<void>;
 
   // Permissions helper
-  hasPermission: (action: 'CLINICAL_WRITE' | 'BILLING_MANAGE' | 'INVENTORY_MANAGE' | 'ADMIN_OPERATIONS') => boolean;
+  hasPermission: (action: PermissionAction) => boolean;
 }
 
 const STORAGE_KEY = 'dentaldesk_db_v1';
@@ -64,10 +93,21 @@ const STORAGE_KEY = 'dentaldesk_db_v1';
 const DentalContext = createContext<DentalContextType | undefined>(undefined);
 
 export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Initialize state from localStorage or initial seeds
+  // Current user initialization
   const [currentUser, setCurrentUser] = useState<User>(() => {
-    return INITIAL_USERS[0]; // Default: Dr. Sarah Chen
+    const savedUser = localStorage.getItem(`${STORAGE_KEY}_currentUser`);
+    if (savedUser) {
+      try {
+        return JSON.parse(savedUser);
+      } catch {
+        return INITIAL_USERS[3]; // Default: Dr. Marcus Vance (Owner)
+      }
+    }
+    return INITIAL_USERS[3]; // Default: Dr. Marcus Vance (Owner)
   });
+
+  const [staffUsers, setStaffUsers] = useState<User[]>(INITIAL_USERS);
+  const [financialReports, setFinancialReports] = useState<FinancialReportData | null>(null);
 
   const [patients, setPatients] = useState<Patient[]>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY}_patients`);
@@ -88,7 +128,7 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return saved ? JSON.parse(saved) : INITIAL_VISITS;
   });
 
-  const [serviceCatalog] = useState<ServiceItem[]>(INITIAL_SERVICE_CATALOG);
+  const [serviceCatalog, setServiceCatalog] = useState<ServiceItem[]>(INITIAL_SERVICE_CATALOG);
 
   const [invoices, setInvoices] = useState<Invoice[]>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY}_invoices`);
@@ -112,46 +152,12 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const [isServerConnected, setIsServerConnected] = useState<boolean>(false);
 
-  // Initial and periodic sync with PostgreSQL backend
-  const refreshFromBackend = async () => {
-    try {
-      const isUp = await api.checkHealth();
-      setIsServerConnected(isUp);
-      if (isUp) {
-        const [pts, appts, vsts, invs, pmts, invItems, logs] = await Promise.all([
-          api.getPatients(),
-          api.getAppointments(),
-          api.getVisits(),
-          api.getInvoices(),
-          api.getPayments(),
-          api.getInventory(),
-          api.getAuditLogs()
-        ]);
-        if (pts && pts.length > 0) {
-          setPatients(pts);
-          setSelectedPatient(prev => prev || pts[0]);
-        }
-        if (appts) setAppointments(appts);
-        if (vsts) setVisits(vsts);
-        if (invs) setInvoices(invs);
-        if (pmts) setPayments(pmts);
-        if (invItems) setInventory(invItems);
-        if (logs) setAuditLogs(logs);
-      }
-    } catch (e) {
-      console.warn('Backend unavailable, operating on local cache:', e);
-      setIsServerConnected(false);
-    }
-  };
-
+  // Synchronize current user to localStorage
   useEffect(() => {
-    refreshFromBackend();
-    // Periodically poll backend every 5 seconds for multi-device sync
-    const interval = setInterval(refreshFromBackend, 5000);
-    return () => clearInterval(interval);
-  }, []);
+    localStorage.setItem(`${STORAGE_KEY}_currentUser`, JSON.stringify(currentUser));
+  }, [currentUser]);
 
-  // Sync to local storage
+  // Synchronize collections to local storage
   useEffect(() => {
     localStorage.setItem(`${STORAGE_KEY}_patients`, JSON.stringify(patients));
   }, [patients]);
@@ -180,6 +186,169 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     localStorage.setItem(`${STORAGE_KEY}_audit`, JSON.stringify(auditLogs));
   }, [auditLogs]);
 
+  // Check login and fetch initial state
+  const refreshFromBackend = useCallback(async () => {
+    try {
+      const isUp = await api.checkHealth();
+      setIsServerConnected(isUp);
+      if (!isUp) return;
+
+      // Always fetch public/clinical baseline: Patients, Appointments, Catalog, Inventory
+      const [pts, appts, catalog, invItems] = await Promise.allSettled([
+        api.getPatients(),
+        api.getAppointments(),
+        api.getServices(),
+        api.getInventory()
+      ]);
+
+      if (pts.status === 'fulfilled' && pts.value?.length > 0) {
+        setPatients(pts.value);
+        setSelectedPatient(prev => prev || pts.value[0]);
+      }
+      if (appts.status === 'fulfilled' && appts.value) {
+        setAppointments(appts.value);
+      }
+      if (catalog.status === 'fulfilled' && catalog.value?.length > 0) {
+        setServiceCatalog(catalog.value);
+      }
+      if (invItems.status === 'fulfilled' && invItems.value) {
+        setInventory(invItems.value);
+      }
+
+      // Role-specific data fetching
+      const role = currentUser.role;
+
+      // 1. Clinical Visits: Dentist & Owner
+      if (role === 'ROLE_DENTIST' || role === 'ROLE_OWNER' || role === 'ROLE_ASSISTANT') {
+        try {
+          const vsts = await api.getVisits();
+          if (vsts) setVisits(vsts);
+        } catch (e) {
+          console.warn('Visits fetch bypassed:', e);
+        }
+      }
+
+      // 2. Billing & Invoices: Owner & Receptionist
+      if (role === 'ROLE_OWNER' || role === 'ROLE_RECEPTIONIST') {
+        try {
+          const [invs, pmts] = await Promise.all([api.getInvoices(), api.getPayments()]);
+          if (invs) setInvoices(invs);
+          if (pmts) setPayments(pmts);
+        } catch (e) {
+          console.warn('Billing fetch bypassed:', e);
+        }
+      }
+
+      // 3. Management & Audits: Owner only
+      if (role === 'ROLE_OWNER' || role === 'ROLE_ADMIN') {
+        try {
+          const [logs, uList, finReports] = await Promise.all([
+            api.getAuditLogs(),
+            api.getUsers(),
+            api.getFinancialReports()
+          ]);
+          if (logs) setAuditLogs(logs);
+          if (uList) setStaffUsers(uList);
+          if (finReports) setFinancialReports(finReports);
+        } catch (e) {
+          console.warn('Admin fetch bypassed:', e);
+        }
+      }
+    } catch (e) {
+      console.warn('Backend unavailable, operating on local cache:', e);
+      setIsServerConnected(false);
+    }
+  }, [currentUser.role]);
+
+  useEffect(() => {
+    refreshFromBackend();
+    const interval = setInterval(refreshFromBackend, 5000);
+    return () => clearInterval(interval);
+  }, [refreshFromBackend]);
+
+  // Auth: Login
+  const login = async (username: string, password?: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await api.login(username, password);
+      setCurrentUser(res.user);
+      await refreshFromBackend();
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Login failed' };
+    }
+  };
+
+  // Auth: Logout
+  const logout = () => {
+    api.logout();
+    tokenStorage.clear();
+    // Revert to demo default
+    setCurrentUser(INITIAL_USERS[3]);
+  };
+
+  // 1-Click Role Switcher Demo
+  const switchUserDemo = async (targetUser: User) => {
+    const passwords: Record<string, string> = {
+      'marcus.v': 'Owner@123',
+      'dr.chen': 'Dentist@123',
+      'elena.r': 'Reception@123',
+      'chloe.k': 'Assistant@123'
+    };
+    try {
+      const pass = passwords[targetUser.username] || 'DentalDesk@2026';
+      await login(targetUser.username, pass);
+    } catch {
+      setCurrentUser(targetUser);
+    }
+  };
+
+  // Staff Management (Owner)
+  const refreshStaffUsers = async () => {
+    try {
+      const usersList = await api.getUsers();
+      setStaffUsers(usersList);
+    } catch (e) {
+      console.error('Failed to fetch staff:', e);
+    }
+  };
+
+  const createStaffUser = async (userData: any): Promise<User> => {
+    const newUser = await api.createUser(userData);
+    setStaffUsers(prev => [...prev, newUser]);
+    logAudit('CREATE', 'User', newUser.id, `Created staff member ${newUser.fullName} (${newUser.role})`);
+    return newUser;
+  };
+
+  const updateStaffUser = async (id: number, data: any): Promise<User> => {
+    const updated = await api.updateUser(id, data);
+    setStaffUsers(prev => prev.map(u => u.id === id ? { ...u, ...updated } : u));
+    logAudit('UPDATE', 'User', id, `Updated staff role/info for ${updated.fullName}`);
+    return updated;
+  };
+
+  // Financial Reports (Owner)
+  const refreshFinancialReports = async () => {
+    try {
+      const data = await api.getFinancialReports();
+      setFinancialReports(data);
+    } catch (e) {
+      console.error('Failed to fetch financial reports:', e);
+    }
+  };
+
+  // Service Fee Update (Owner)
+  const updateServiceFee = async (id: number, price: number) => {
+    setServiceCatalog(prev => prev.map(s => s.id === id ? { ...s, defaultPrice: price } : s));
+    if (isServerConnected) {
+      try {
+        await api.updateServiceFee(id, { defaultPrice: price });
+      } catch (e) {
+        console.error('Failed to sync service fee update:', e);
+      }
+    }
+    logAudit('UPDATE', 'ServiceItem', id, `Updated service fee to $${price}`);
+  };
+
   // Audit logging helper
   const logAudit = (
     actionType: AuditLog['actionType'],
@@ -197,23 +366,31 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       entityId,
       timestamp: new Date().toISOString(),
       details,
-      ipAddress: '192.168.1.100 (LAN Local)'
+      ipAddress: '192.168.1.100 (LAN)'
     };
     setAuditLogs(prev => [newLog, ...prev]);
   };
 
   // RBAC Permission Evaluator
-  const hasPermission = (action: 'CLINICAL_WRITE' | 'BILLING_MANAGE' | 'INVENTORY_MANAGE' | 'ADMIN_OPERATIONS'): boolean => {
+  const hasPermission = (action: PermissionAction): boolean => {
     const role: UserRole = currentUser.role;
     switch (action) {
-      case 'CLINICAL_WRITE':
-        return role === 'ROLE_DENTIST' || role === 'ROLE_OWNER';
-      case 'BILLING_MANAGE':
-        return role === 'ROLE_RECEPTIONIST' || role === 'ROLE_OWNER' || role === 'ROLE_ADMIN';
-      case 'INVENTORY_MANAGE':
-        return role === 'ROLE_ASSISTANT' || role === 'ROLE_OWNER' || role === 'ROLE_ADMIN';
+      case 'MANAGE_STAFF':
+      case 'VIEW_FINANCIALS':
+      case 'EDIT_SERVICE_FEES':
       case 'ADMIN_OPERATIONS':
         return role === 'ROLE_OWNER' || role === 'ROLE_ADMIN';
+      case 'CLINICAL_WRITE':
+        return role === 'ROLE_DENTIST' || role === 'ROLE_OWNER';
+      case 'VIEW_CLINICAL_NOTES':
+        return role === 'ROLE_DENTIST' || role === 'ROLE_OWNER' || role === 'ROLE_ASSISTANT';
+      case 'BILLING_MANAGE':
+      case 'RECORD_PAYMENT':
+        return role === 'ROLE_RECEPTIONIST' || role === 'ROLE_OWNER';
+      case 'SCHEDULE_MANAGE':
+        return role === 'ROLE_RECEPTIONIST' || role === 'ROLE_DENTIST' || role === 'ROLE_OWNER';
+      case 'INVENTORY_MANAGE':
+        return role === 'ROLE_ASSISTANT' || role === 'ROLE_DENTIST' || role === 'ROLE_OWNER';
       default:
         return false;
     }
@@ -236,92 +413,80 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     setPatients(prev => [newPatient, ...prev]);
     setSelectedPatient(newPatient);
-    logAudit('CREATE', 'Patient', patientCode, `Created record for ${newPatient.firstName} ${newPatient.lastName}`);
+    logAudit('CREATE', 'Patient', patientCode, `Registered patient ${newPatient.firstName} ${newPatient.lastName}`);
 
     if (isServerConnected) {
-      api.createPatient(patientData).then(serverPatient => {
-        setPatients(prev => prev.map(p => p.id === nextId ? serverPatient : p));
-        setSelectedPatient(serverPatient);
-      }).catch(err => console.error('Failed to sync patient to server:', err));
+      api.createPatient(newPatient).catch(err => console.error('Failed to sync patient creation:', err));
     }
 
     return newPatient;
   };
 
-  const updatePatient = (id: number, data: Partial<Patient>) => {
+  const updatePatient = (id: number, data: Partial<Patient>): boolean => {
+    let success = false;
     setPatients(prev => prev.map(p => {
       if (p.id === id) {
-        return {
+        success = true;
+        const updated = {
           ...p,
           ...data,
           version: p.version + 1,
           updatedAt: new Date().toISOString()
         };
+        if (selectedPatient?.id === id) {
+          setSelectedPatient(updated);
+        }
+        return updated;
       }
       return p;
     }));
-    logAudit('UPDATE', 'Patient', id, `Updated patient profile ID ${id}`);
 
-    if (isServerConnected) {
-      api.updatePatient(id, data).catch(err => console.error('Failed to sync patient update:', err));
+    if (success) {
+      logAudit('UPDATE', 'Patient', id, `Updated demographics/medical alerts for patient ID ${id}`);
+      if (isServerConnected) {
+        api.updatePatient(id, data).catch(err => console.error('Failed to sync patient update:', err));
+      }
     }
-    return true;
+    return success;
   };
 
-  // Appointment & Schedule Management
+  // Appointments & Queue
   const bookAppointment = (data: Omit<Appointment, 'id' | 'version' | 'createdAt'>) => {
-    // Check for scheduling collision on same operatory chair or dentist at same time
-    const newStart = new Date(data.scheduledStart).getTime();
-    const newEnd = newStart + data.durationMinutes * 60 * 1000;
-
-    const conflict = appointments.find(app => {
-      if (app.status === 'CANCELLED' || app.status === 'COMPLETED') return false;
-      if (app.dentistId !== data.dentistId && app.operatoryChair !== data.operatoryChair) return false;
-      
-      const appStart = new Date(app.scheduledStart).getTime();
-      const appEnd = appStart + app.durationMinutes * 60 * 1000;
-
-      return (newStart < appEnd && newEnd > appStart);
-    });
-
-    if (conflict) {
-      return { 
-        success: false, 
-        error: `Scheduling Collision: ${conflict.operatoryChair} is already reserved at this time.` 
-      };
-    }
-
     const nextId = appointments.length > 0 ? Math.max(...appointments.map(a => a.id)) + 1 : 1;
-    const newApp: Appointment = {
+    const newAppointment: Appointment = {
       ...data,
       id: nextId,
       version: 1,
       createdAt: new Date().toISOString()
     };
 
-    setAppointments(prev => [...prev, newApp]);
-    logAudit('CREATE', 'Appointment', nextId, `Booked ${newApp.operatoryChair} for patient #${data.patientId}`);
+    setAppointments(prev => [newAppointment, ...prev]);
+    logAudit('CREATE', 'Appointment', nextId, `Scheduled appointment for patient #${data.patientId} at ${data.scheduledStart}`);
 
     if (isServerConnected) {
-      api.bookAppointment(data).then(serverApp => {
-        setAppointments(prev => prev.map(a => a.id === nextId ? serverApp : a));
-      }).catch(err => console.error('Failed to sync appointment to server:', err));
+      api.bookAppointment(newAppointment).catch(err => console.error('Failed to sync appointment booking:', err));
     }
 
     return { success: true };
   };
 
   const updateAppointmentStatus = (id: number, status: AppointmentStatus) => {
-    setAppointments(prev => prev.map(a => a.id === id ? { ...a, status, version: a.version + 1 } : a));
-    logAudit('UPDATE', 'Appointment', id, `Changed appointment status to ${status}`);
+    setAppointments(prev => prev.map(a => {
+      if (a.id === id) {
+        return { ...a, status, version: a.version + 1 };
+      }
+      return a;
+    }));
+
+    logAudit('UPDATE', 'Appointment', id, `Updated status to ${status}`);
 
     if (isServerConnected) {
-      api.updateAppointmentStatus(id, status).catch(err => console.error('Failed to sync status:', err));
+      api.updateAppointmentStatus(id, status).catch(err => console.error('Failed to sync appointment status:', err));
     }
   };
 
-  // Clinical Visits & Odontogram
-  const saveVisit = (visitData: Omit<ClinicalVisit, 'id' | 'createdAt'>) => {
+  // Clinical Visits
+  const saveVisit = (visitData: Omit<ClinicalVisit, 'id' | 'createdAt'>): ClinicalVisit => {
     const nextId = visits.length > 0 ? Math.max(...visits.map(v => v.id)) + 1 : 1;
     const newVisit: ClinicalVisit = {
       ...visitData,
@@ -330,39 +495,35 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     setVisits(prev => [newVisit, ...prev]);
-    logAudit('CREATE', 'ClinicalVisit', nextId, `Logged clinical examination & odontogram for patient #${visitData.patientId}`);
+    logAudit('CREATE', 'ClinicalVisit', nextId, `Saved SOAP encounter notes for patient #${visitData.patientId}`);
 
     if (isServerConnected) {
-      api.saveVisit(visitData).then(serverVisit => {
-        setVisits(prev => prev.map(v => v.id === nextId ? serverVisit : v));
-      }).catch(err => console.error('Failed to sync visit to server:', err));
+      api.saveVisit(newVisit).catch(err => console.error('Failed to sync visit to server:', err));
     }
 
     return newVisit;
   };
 
-  const getPatientVisits = (patientId: number) => {
+  const getPatientVisits = (patientId: number): ClinicalVisit[] => {
     return visits.filter(v => v.patientId === patientId);
   };
 
   const getPatientToothRecords = (patientId: number): ToothRecord[] => {
-    const patientVisits = getPatientVisits(patientId);
-    if (patientVisits.length === 0) return [];
-    // Aggregate tooth records with latest diagnosis
-    const recordsMap = new Map<number, ToothRecord>();
+    const patientVisits = visits.filter(v => v.patientId === patientId);
+    const map: Record<number, ToothRecord> = {};
     patientVisits.forEach(v => {
-      v.toothRecords.forEach(tr => {
-        recordsMap.set(tr.toothNumber, tr);
+      v.toothRecords?.forEach(tr => {
+        map[tr.toothNumber] = tr;
       });
     });
-    return Array.from(recordsMap.values());
+    return Object.values(map);
   };
 
-  // Invoicing & Payments
-  const createInvoice = (data: Omit<Invoice, 'id' | 'invoiceNumber' | 'version' | 'createdAt'>) => {
+  // Billing & Invoices
+  const createInvoice = (data: Omit<Invoice, 'id' | 'invoiceNumber' | 'version' | 'createdAt'>): Invoice => {
     const nextId = invoices.length > 0 ? Math.max(...invoices.map(i => i.id)) + 1 : 1;
     const invoiceNumber = `INV-2026-${String(nextId).padStart(4, '0')}`;
-
+    
     const newInvoice: Invoice = {
       ...data,
       id: nextId,
@@ -372,18 +533,16 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     setInvoices(prev => [newInvoice, ...prev]);
-    logAudit('CREATE', 'Invoice', invoiceNumber, `Generated invoice for total $${newInvoice.totalAmount}`);
+    logAudit('CREATE', 'Invoice', invoiceNumber, `Created invoice #${invoiceNumber} total $${data.totalAmount}`);
 
     if (isServerConnected) {
-      api.createInvoice(data).then(serverInv => {
-        setInvoices(prev => prev.map(i => i.id === nextId ? serverInv : i));
-      }).catch(err => console.error('Failed to sync invoice to server:', err));
+      api.createInvoice(newInvoice).catch(err => console.error('Failed to sync invoice to server:', err));
     }
 
     return newInvoice;
   };
 
-  const recordPayment = (paymentData: Omit<Payment, 'id' | 'receiptNumber'>) => {
+  const recordPayment = (paymentData: Omit<Payment, 'id' | 'receiptNumber'>): Payment => {
     const nextId = payments.length > 0 ? Math.max(...payments.map(p => p.id)) + 1 : 1;
     const receiptNumber = `RCPT-2026-${String(nextId).padStart(4, '0')}`;
 
@@ -395,7 +554,6 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     setPayments(prev => [newPayment, ...prev]);
 
-    // Update corresponding invoice paid amount and status
     setInvoices(prev => prev.map(inv => {
       if (inv.id === paymentData.invoiceId) {
         const newPaid = inv.paidAmount + paymentData.amount;
@@ -496,7 +654,15 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     <DentalContext.Provider value={{
       currentUser,
       setCurrentUser,
+      isAuthenticated: !!currentUser,
+      login,
+      logout,
+      switchUserDemo,
       users: INITIAL_USERS,
+      staffUsers,
+      refreshStaffUsers,
+      createStaffUser,
+      updateStaffUser,
       patients,
       addPatient,
       updatePatient,
@@ -510,10 +676,13 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       getPatientVisits,
       getPatientToothRecords,
       serviceCatalog,
+      updateServiceFee,
       invoices,
       createInvoice,
       payments,
       recordPayment,
+      financialReports,
+      refreshFinancialReports,
       inventory,
       updateInventoryStock,
       auditLogs,

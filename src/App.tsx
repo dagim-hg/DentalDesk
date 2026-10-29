@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 import { DentalProvider, useDental } from './context/DentalContext';
-import { Header } from './components/Header';
+import { ModernSidebar } from './components/layout/ModernSidebar';
+import { ModernTopBar } from './components/layout/ModernTopBar';
+import { OwnerDashboard } from './components/dashboards/OwnerDashboard';
+import { DentistDashboard } from './components/dashboards/DentistDashboard';
+import { ReceptionistDashboard } from './components/dashboards/ReceptionistDashboard';
+import { ForbiddenView } from './components/dashboards/ForbiddenView';
+import { LoginModal } from './components/auth/LoginModal';
+
 import { QueueTriage } from './components/QueueTriage';
 import { ToothChart } from './components/ToothChart';
 import { PatientRegistry } from './components/PatientRegistry';
@@ -9,149 +16,163 @@ import { BillingInvoicing } from './components/BillingInvoicing';
 import { InventoryTracker } from './components/InventoryTracker';
 import { AuditBackup } from './components/AuditBackup';
 import { Patient } from './types/dental';
-import { 
-  Users, Activity, UserPlus, Calendar, 
-  DollarSign, Package, ShieldCheck, Stethoscope 
-} from 'lucide-react';
 
-type TabKey = 'queue' | 'chart' | 'patients' | 'schedule' | 'billing' | 'inventory' | 'audit';
+import './styles/dashboard.css';
 
 function DentalDeskMain() {
-  const [activeTab, setActiveTab] = useState<TabKey>('queue');
+  const { currentUser, setSelectedPatient, hasPermission } = useDental();
+  const [currentTab, setCurrentTab] = useState<string>('home');
   const [billingPatientId, setBillingPatientId] = useState<number | undefined>(undefined);
-  const { appointments, selectedPatient, setSelectedPatient, inventory } = useDental();
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
 
-  const waitingCount = appointments.filter(a => a.status === 'ARRIVED').length;
-  const inChairCount = appointments.filter(a => a.status === 'IN_OPERATORY').length;
-  const lowStockCount = inventory.filter(i => i.currentStock <= i.reorderThreshold).length;
+  const role = currentUser.role;
 
   const handleNavigateToChart = (patient: Patient) => {
     setSelectedPatient(patient);
-    setActiveTab('chart');
+    setCurrentTab('chart');
   };
 
   const handleNavigateToBilling = (patientId: number) => {
     setBillingPatientId(patientId);
-    setActiveTab('billing');
+    setCurrentTab('billing');
+  };
+
+  // Route & RBAC Permission Gatekeeper
+  const renderContent = () => {
+    // 1. Primary Role Dashboards
+    if (currentTab === 'home') {
+      if (role === 'ROLE_OWNER') {
+        return <OwnerDashboard onNavigateTab={setCurrentTab} />;
+      }
+      if (role === 'ROLE_DENTIST') {
+        return <DentistDashboard onNavigateTab={setCurrentTab} />;
+      }
+      if (role === 'ROLE_RECEPTIONIST') {
+        return <ReceptionistDashboard onNavigateTab={setCurrentTab} />;
+      }
+      // Assistant or Admin fallback
+      return <ReceptionistDashboard onNavigateTab={setCurrentTab} />;
+    }
+
+    // 2. Queue & Triage Workspace
+    if (currentTab === 'queue') {
+      return (
+        <QueueTriage
+          onNavigateToChart={handleNavigateToChart}
+          onNavigateToBilling={handleNavigateToBilling}
+        />
+      );
+    }
+
+    // 3. Clinical Chart & Odontogram (Forbidden for Receptionist)
+    if (currentTab === 'chart') {
+      if (!hasPermission('VIEW_CLINICAL_NOTES')) {
+        return (
+          <ForbiddenView
+            attemptedResource="Clinical Odontogram & Private SOAP Notes"
+            onReturnHome={() => setCurrentTab('home')}
+          />
+        );
+      }
+      return <ToothChart />;
+    }
+
+    // 4. Patients Registry
+    if (currentTab === 'patients') {
+      return <PatientRegistry onOpenChart={handleNavigateToChart} />;
+    }
+
+    // 5. Appointment Schedule & Calendar
+    if (currentTab === 'appointments') {
+      return <AppointmentCalendar />;
+    }
+
+    // 6. Billing, Invoicing & Cashier (Dentist has restricted view)
+    if (currentTab === 'billing') {
+      return <BillingInvoicing initialPatientId={billingPatientId} />;
+    }
+
+    // 7. Inventory & Supplies
+    if (currentTab === 'inventory') {
+      return <InventoryTracker />;
+    }
+
+    // 8. LAN Appliance & Audit Logs (Owner/Admin ONLY)
+    if (currentTab === 'audits') {
+      if (!hasPermission('ADMIN_OPERATIONS')) {
+        return (
+          <ForbiddenView
+            attemptedResource="Air-Gapped Security Audit Logs & Database Snapshots"
+            onReturnHome={() => setCurrentTab('home')}
+          />
+        );
+      }
+      return <AuditBackup />;
+    }
+
+    // 9. Staff & Team Roles Management (Owner ONLY)
+    if (currentTab === 'staff') {
+      if (!hasPermission('MANAGE_STAFF')) {
+        return (
+          <ForbiddenView
+            attemptedResource="Staff Account Credentials & Role Provisioning"
+            onReturnHome={() => setCurrentTab('home')}
+          />
+        );
+      }
+      return <OwnerDashboard onNavigateTab={setCurrentTab} />;
+    }
+
+    // 10. Service Fee Catalog (Owner ONLY)
+    if (currentTab === 'fees') {
+      if (!hasPermission('EDIT_SERVICE_FEES')) {
+        return (
+          <ForbiddenView
+            attemptedResource="Clinic Service Pricing & Fee Structure"
+            onReturnHome={() => setCurrentTab('home')}
+          />
+        );
+      }
+      return <BillingInvoicing />;
+    }
+
+    // 11. Daily Reconciliation (Receptionist & Owner)
+    if (currentTab === 'reconciliation') {
+      return <BillingInvoicing />;
+    }
+
+    // Default fallback
+    return <OwnerDashboard onNavigateTab={setCurrentTab} />;
   };
 
   return (
-    <div className="app-container">
-      {/* Top Clinic Header */}
-      <Header onOpenBackup={() => setActiveTab('audit')} />
-
-      {/* Navigation Tab Bar */}
-      <nav className="nav-tab-bar">
-        <button
-          className={`nav-tab-btn ${activeTab === 'queue' ? 'active' : ''}`}
-          onClick={() => setActiveTab('queue')}
-        >
-          <Users size={16} />
-          <span>Queue & Triage</span>
-          {waitingCount > 0 && (
-            <span className="badge-counter">{waitingCount}</span>
-          )}
-        </button>
-
-        <button
-          className={`nav-tab-btn ${activeTab === 'chart' ? 'active' : ''}`}
-          onClick={() => setActiveTab('chart')}
-        >
-          <Activity size={16} />
-          <span>Odontogram & Chart</span>
-          {selectedPatient && (
-            <span style={{ fontSize: '0.72rem', opacity: 0.8, background: 'rgba(255,255,255,0.1)', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
-              {selectedPatient.firstName}
-            </span>
-          )}
-        </button>
-
-        <button
-          className={`nav-tab-btn ${activeTab === 'patients' ? 'active' : ''}`}
-          onClick={() => setActiveTab('patients')}
-        >
-          <UserPlus size={16} />
-          <span>Patient Registry</span>
-        </button>
-
-        <button
-          className={`nav-tab-btn ${activeTab === 'schedule' ? 'active' : ''}`}
-          onClick={() => setActiveTab('schedule')}
-        >
-          <Calendar size={16} />
-          <span>Operatory Schedule</span>
-          {inChairCount > 0 && (
-            <span className="badge-counter" style={{ background: 'var(--warning)', color: '#000' }}>
-              {inChairCount} in chair
-            </span>
-          )}
-        </button>
-
-        <button
-          className={`nav-tab-btn ${activeTab === 'billing' ? 'active' : ''}`}
-          onClick={() => {
-            setBillingPatientId(undefined);
-            setActiveTab('billing');
-          }}
-        >
-          <DollarSign size={16} />
-          <span>Billing & Cashier</span>
-        </button>
-
-        <button
-          className={`nav-tab-btn ${activeTab === 'inventory' ? 'active' : ''}`}
-          onClick={() => setActiveTab('inventory')}
-        >
-          <Package size={16} />
-          <span>Dental Supplies</span>
-          {lowStockCount > 0 && (
-            <span className="badge-urgent">{lowStockCount}</span>
-          )}
-        </button>
-
-        <button
-          className={`nav-tab-btn ${activeTab === 'audit' ? 'active' : ''}`}
-          onClick={() => setActiveTab('audit')}
-          style={{ marginLeft: 'auto' }}
-        >
-          <ShieldCheck size={16} />
-          <span>LAN Appliance & Audits</span>
-        </button>
-      </nav>
+    <div className="modern-shell">
+      {/* Left Modern Sidebar tailored to authenticated role */}
+      <ModernSidebar
+        currentTab={currentTab}
+        onTabChange={setCurrentTab}
+        onOpenLoginModal={() => setIsLoginModalOpen(true)}
+      />
 
       {/* Main Viewport */}
-      <main className="main-viewport">
-        {activeTab === 'queue' && (
-          <QueueTriage
-            onNavigateToChart={handleNavigateToChart}
-            onNavigateToBilling={handleNavigateToBilling}
-          />
-        )}
+      <main className="modern-main-content">
+        {/* Top Navigation Bar with Search, Greeting, Status */}
+        <ModernTopBar
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onOpenLoginModal={() => setIsLoginModalOpen(true)}
+        />
 
-        {activeTab === 'chart' && (
-          <ToothChart />
-        )}
-
-        {activeTab === 'patients' && (
-          <PatientRegistry onOpenChart={handleNavigateToChart} />
-        )}
-
-        {activeTab === 'schedule' && (
-          <AppointmentCalendar />
-        )}
-
-        {activeTab === 'billing' && (
-          <BillingInvoicing initialPatientId={billingPatientId} />
-        )}
-
-        {activeTab === 'inventory' && (
-          <InventoryTracker />
-        )}
-
-        {activeTab === 'audit' && (
-          <AuditBackup />
-        )}
+        {/* Dynamic Role-Based Content Area */}
+        {renderContent()}
       </main>
+
+      {/* Shared Login & Switcher Modal */}
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+      />
     </div>
   );
 }

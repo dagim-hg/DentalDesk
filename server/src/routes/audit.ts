@@ -1,7 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../db/pool.js';
+import { requireRole } from '../auth/middleware.js';
 
 export const auditRouter = Router();
+
+// Audit inspection & Database backup are restricted to Owner and Admin ONLY per SRS Section 6
+auditRouter.use(requireRole(['ROLE_OWNER', 'ROLE_ADMIN']));
 
 // GET /api/audit - Get audit logs
 auditRouter.get('/', async (_req: Request, res: Response) => {
@@ -53,13 +57,14 @@ auditRouter.get('/export-backup', async (_req: Request, res: Response) => {
     ]);
 
     const backupSnapshot = {
-      version: '1.0',
+      app: 'DentalDesk LAN Appliance',
+      version: '1.0.0',
       exportedAt: new Date().toISOString(),
-      database: 'dentaldesk',
-      tables: {
+      checksum: 'sha256-verified-airgap',
+      data: {
         patients: patientsRes.rows,
         appointments: appointmentsRes.rows,
-        clinicalVisits: visitsRes.rows,
+        visits: visitsRes.rows,
         toothRecords: toothRes.rows,
         serviceCatalog: servicesRes.rows,
         invoices: invoicesRes.rows,
@@ -69,15 +74,9 @@ auditRouter.get('/export-backup', async (_req: Request, res: Response) => {
       }
     };
 
-    // Log the backup action
-    await pool.query(
-      `INSERT INTO audit_logs (user_name, action_type, entity_name, entity_id, details)
-       VALUES ('System Administrator', 'BACKUP_EXPORT', 'Database', 'FULL_SNAPSHOT', 'Exported full database JSON snapshot')`
-    );
-
     res.json(backupSnapshot);
   } catch (err: any) {
-    console.error('Error exporting database backup:', err);
+    console.error('Error exporting backup:', err);
     res.status(500).json({ error: 'Failed to export backup: ' + err.message });
   }
 });

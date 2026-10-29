@@ -1,6 +1,12 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { authenticate } from './auth/middleware.js';
+import { authRouter } from './routes/auth.js';
+import { usersRouter } from './routes/users.js';
+import { reportsRouter } from './routes/reports.js';
 import { patientsRouter } from './routes/patients.js';
 import { appointmentsRouter } from './routes/appointments.js';
 import { visitsRouter } from './routes/visits.js';
@@ -9,18 +15,28 @@ import { inventoryRouter } from './routes/inventory.js';
 import { auditRouter } from './routes/audit.js';
 import { pool } from './db/pool.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config();
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '5000', 10);
 
 // Middlewares
-app.use(cors());
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
 app.use(express.json());
+
+// Global authentication extractor (populates req.user if Bearer token present)
+app.use('/api', authenticate);
 
 // Request logging
 app.use((req, _res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  const userTag = req.user ? ` [${req.user.role}:${req.user.username}]` : ' [Guest]';
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}${userTag}`);
   next();
 });
 
@@ -43,7 +59,10 @@ app.get('/api/health', async (_req, res) => {
   }
 });
 
-// API Routes
+// Mount Routes
+app.use('/api/auth', authRouter);
+app.use('/api/users', usersRouter);
+app.use('/api/reports', reportsRouter);
 app.use('/api/patients', patientsRouter);
 app.use('/api/appointments', appointmentsRouter);
 app.use('/api/visits', visitsRouter);

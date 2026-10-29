@@ -195,3 +195,53 @@ export interface AuditLog {
   details: string;
   ipAddress: string;
 }
+
+
+export interface ProductionKpis {
+  totalAppointments: number;
+  totalAppointmentsTrend: string;
+  treatmentsDone: number;
+  treatmentsDoneTrend: string;
+  averageChairTime: number;
+  averageChairTimeTrend: string;
+  reappointmentRate: number;
+  reappointmentRateTrend: string;
+}
+
+export interface ClinicalKpis {
+  onTimeRate: number;
+  retreatmentRate: number;
+  complicationRate: number;
+  complicationAlert: string;
+  successRate: number;
+}
+
+export interface MonthlyFinancial {
+  month: string;
+  revenue: number;
+  expenses: number;
+}
+
+export interface FinancialSnapshot {
+  totalInvoiced: number;
+  totalCollected: number;
+  expenses: number;
+  profitMargin: number;
+  monthlyBreakdown: MonthlyFinancial[];
+}
+
+export interface PatientsOverview {
+  newPatients: number;
+  returningPatients: number;
+  satisfactionScore: number;
+  ratioNew: number;
+  ratioReturning: number;
+  ratioOther: number;
+}
+
+export interface FinancialReportData {
+  productionKpis: ProductionKpis;
+  financialSnapshot: FinancialSnapshot;
+  clinicalKpis: ClinicalKpis;
+  patientsOverview: PatientsOverview;
+}

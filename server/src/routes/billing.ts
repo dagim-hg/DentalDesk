@@ -1,10 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../db/pool.js';
+import { requireAuth, requireRole } from '../auth/middleware.js';
 
 export const billingRouter = Router();
 
-// GET /api/billing/services - Get service catalog
-billingRouter.get('/services', async (_req: Request, res: Response) => {
+// GET /api/billing/services - Get service catalog (all authenticated staff)
+billingRouter.get('/services', requireAuth, async (_req: Request, res: Response) => {
   try {
     const { rows } = await pool.query(
       'SELECT id, code AS "serviceCode", name, category, standard_fee AS "defaultPrice", active AS "isActive" FROM service_catalog WHERE active = true ORDER BY id ASC'
@@ -16,8 +17,46 @@ billingRouter.get('/services', async (_req: Request, res: Response) => {
   }
 });
 
+// PUT /api/billing/services/:id - Update standard service fee (Owner/Manager ONLY)
+billingRouter.put('/services/:id', requireRole(['ROLE_OWNER', 'ROLE_ADMIN']), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { defaultPrice, name, category, isActive } = req.body;
+
+    const { rows } = await pool.query(
+      `UPDATE service_catalog 
+       SET standard_fee = COALESCE($1, standard_fee),
+           name = COALESCE($2, name),
+           category = COALESCE($3, category),
+           active = COALESCE($4, active)
+       WHERE id = $5
+       RETURNING id, code AS "serviceCode", name, category, standard_fee AS "defaultPrice", active AS "isActive"`,
+      [defaultPrice, name, category, isActive, id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Service not found' });
+    }
+
+    const updated = rows[0];
+    const actorName = req.user?.fullName || 'Clinic Owner';
+    const actorId = req.user?.id || null;
+
+    await pool.query(
+      `INSERT INTO audit_logs (user_id, user_name, action_type, entity_name, entity_id, details)
+       VALUES ($1, $2, 'UPDATE', 'ServiceCatalog', $3, $4)`,
+      [actorId, actorName, id, `Updated service fee for ${updated.name} to $${updated.defaultPrice}`]
+    );
+
+    res.json(updated);
+  } catch (err: any) {
+    console.error('Error updating service fee:', err);
+    res.status(500).json({ error: 'Failed to update service fee' });
+  }
+});
+
 // GET /api/billing/invoices - Get invoices
-billingRouter.get('/invoices', async (_req: Request, res: Response) => {
+billingRouter.get('/invoices', requireAuth, async (_req: Request, res: Response) => {
   try {
     const { rows } = await pool.query(`
       SELECT 
@@ -48,8 +87,8 @@ billingRouter.get('/invoices', async (_req: Request, res: Response) => {
   }
 });
 
-// POST /api/billing/invoices - Create new invoice
-billingRouter.post('/invoices', async (req: Request, res: Response) => {
+// POST /api/billing/invoices - Create new invoice (Owner & Receptionist ONLY)
+billingRouter.post('/invoices', requireRole(['ROLE_OWNER', 'ROLE_RECEPTIONIST', 'ROLE_ADMIN']), async (req: Request, res: Response) => {
   try {
     const data = req.body;
     const year = new Date().getFullYear();
@@ -87,10 +126,12 @@ billingRouter.post('/invoices', async (req: Request, res: Response) => {
     const r = rows[0];
 
     // Audit log
+    const actorName = req.user?.fullName || 'Cashier';
+    const actorId = req.user?.id || null;
     await pool.query(
-      `INSERT INTO audit_logs (user_name, action_type, entity_name, entity_id, details)
-       VALUES ($1, 'CREATE', 'Invoice', $2, $3)`,
-      ['Cashier', r.invoice_number, `Generated invoice for patient ${r.patient_id} total $${totalAmount}`]
+      `INSERT INTO audit_logs (user_id, user_name, action_type, entity_name, entity_id, details)
+       VALUES ($1, $2, 'CREATE', 'Invoice', $3, $4)`,
+      [actorId, actorName, r.invoice_number, `Generated invoice for patient ID ${r.patient_id} total $${totalAmount}`]
     );
 
     res.status(201).json({
@@ -114,8 +155,8 @@ billingRouter.post('/invoices', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/billing/payments - Get all payments
-billingRouter.get('/payments', async (_req: Request, res: Response) => {
+// GET /api/billing/payments - Get all payments (Owner & Receptionist ONLY)
+billingRouter.get('/payments', requireRole(['ROLE_OWNER', 'ROLE_RECEPTIONIST', 'ROLE_ADMIN']), async (_req: Request, res: Response) => {
   try {
     const { rows } = await pool.query(`
       SELECT 
@@ -139,8 +180,8 @@ billingRouter.get('/payments', async (_req: Request, res: Response) => {
   }
 });
 
-// POST /api/billing/payments - Record a payment
-billingRouter.post('/payments', async (req: Request, res: Response) => {
+// POST /api/billing/payments - Record a payment (Owner & Receptionist ONLY)
+billingRouter.post('/payments', requireRole(['ROLE_OWNER', 'ROLE_RECEPTIONIST', 'ROLE_ADMIN']), async (req: Request, res: Response) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -151,6 +192,9 @@ billingRouter.post('/payments', async (req: Request, res: Response) => {
     const seq = parseInt(countRes.rows[0].count, 10) + 1;
     const receiptNumber = `RCPT-${year}-${String(seq).padStart(4, '0')}`;
     const amount = Number(data.amount || 0);
+
+    const actorName = req.user?.fullName || data.receivedBy || 'Front Desk Cashier';
+    const actorId = req.user?.id || null;
 
     const paymentSql = `
       INSERT INTO payments (
@@ -167,7 +211,7 @@ billingRouter.post('/payments', async (req: Request, res: Response) => {
       data.paymentMethod || 'CASH',
       data.transactionReference || null,
       data.notes || null,
-      data.receivedBy || 'Front Desk Cashier'
+      actorName
     ];
     const paymentRes = await client.query(paymentSql, paymentValues);
     const p = paymentRes.rows[0];
@@ -187,9 +231,9 @@ billingRouter.post('/payments', async (req: Request, res: Response) => {
 
     // Audit log
     await client.query(
-      `INSERT INTO audit_logs (user_name, action_type, entity_name, entity_id, details)
-       VALUES ($1, 'PAYMENT', 'Payment', $2, $3)`,
-      ['Front Desk Cashier', receiptNumber, `Collected $${amount} via ${data.paymentMethod} for invoice ${data.invoiceId}`]
+      `INSERT INTO audit_logs (user_id, user_name, action_type, entity_name, entity_id, details)
+       VALUES ($1, $2, 'PAYMENT', 'Payment', $3, $4)`,
+      [actorId, actorName, receiptNumber, `Collected $${amount} via ${data.paymentMethod} for invoice ${data.invoiceId}`]
     );
 
     await client.query('COMMIT');
