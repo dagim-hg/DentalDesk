@@ -282,7 +282,8 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const logout = () => {
     api.logout();
     tokenStorage.clear();
-    // Revert to demo default
+    // Clear stored user so ProtectedRoute sees unauthenticated state
+    localStorage.removeItem('dentaldesk_db_v1_currentUser');
     setCurrentUser(INITIAL_USERS[3]);
   };
 
@@ -654,7 +655,7 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     <DentalContext.Provider value={{
       currentUser,
       setCurrentUser,
-      isAuthenticated: !!currentUser,
+      isAuthenticated: !!tokenStorage.get(),
       login,
       logout,
       switchUserDemo,
