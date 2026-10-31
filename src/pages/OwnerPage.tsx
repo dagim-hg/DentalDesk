@@ -11,7 +11,8 @@ import { AppointmentCalendar } from '../components/AppointmentCalendar';
 import { BillingInvoicing } from '../components/BillingInvoicing';
 import { InventoryTracker } from '../components/InventoryTracker';
 import { AuditBackup } from '../components/AuditBackup';
-import { ForbiddenView } from '../components/dashboards/ForbiddenView';
+import { StaffManagement } from '../components/StaffManagement';
+import { ServiceFeeCatalog } from '../components/ServiceFeeCatalog';
 import { Patient } from '../types/dental';
 
 export const OwnerPage: React.FC = () => {
@@ -41,8 +42,8 @@ export const OwnerPage: React.FC = () => {
           <Route path="appointments" element={<AppointmentCalendar />} />
           <Route path="chart" element={<ToothChart />} />
           <Route path="billing" element={<BillingInvoicing initialPatientId={billingPatientId} />} />
-          <Route path="fees" element={<BillingInvoicing />} />
-          <Route path="staff" element={<OwnerDashboard onNavigateTab={(tab) => navigate(`/owner/${tab}`)} />} />
+          <Route path="fees" element={<ServiceFeeCatalog />} />
+          <Route path="staff" element={<StaffManagement />} />
           <Route path="inventory" element={<InventoryTracker />} />
           <Route path="audits" element={<AuditBackup />} />
           <Route path="queue" element={
@@ -57,4 +58,3 @@ export const OwnerPage: React.FC = () => {
     </div>
   );
 };
-
