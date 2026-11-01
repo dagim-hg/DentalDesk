@@ -73,20 +73,6 @@ export const ModernSidebar: React.FC<ModernSidebarProps> = ({ baseRoute }) => {
         {/* ── OWNER NAVIGATION ── */}
         {role === 'ROLE_OWNER' && (
           <>
-            <div className="nav-section-title">CLINIC</div>
-            <button className={`nav-pill-btn ${isActive('patients') ? 'active' : ''}`} onClick={() => go('patients')}>
-              <Users size={18} /><span>Patients</span>
-            </button>
-            <button className={`nav-pill-btn ${isActive('appointments') ? 'active' : ''}`} onClick={() => go('appointments')}>
-              <Calendar size={18} /><span>Appointments</span>
-              {inOperatoryCount > 0 && (
-                <span className="nav-counter-pill">{inOperatoryCount} in chair</span>
-              )}
-            </button>
-            <button className={`nav-pill-btn ${isActive('chart') ? 'active' : ''}`} onClick={() => go('chart')}>
-              <Activity size={18} /><span>Treatments & Chart</span>
-            </button>
-
             <div className="nav-section-title">FINANCE</div>
             <button className={`nav-pill-btn ${isActive('billing') ? 'active' : ''}`} onClick={() => go('billing')}>
               <DollarSign size={18} /><span>Billing & Payments</span>

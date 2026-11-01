@@ -143,14 +143,9 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigateTab })
             <Activity size={18} color="var(--dd-primary-teal)" />
             <span>Production KPIs</span>
           </div>
-          <button 
-            className="card-view-all-link" 
-            onClick={() => onNavigateTab('appointments')}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.82rem', fontWeight: 600, color: 'var(--dd-text-muted)', background: 'transparent', border: 'none', cursor: 'pointer' }}
-          >
-            <span>View all</span>
-            <ChevronRight size={14} />
-          </button>
+          <span style={{ fontSize: '0.78rem', color: 'var(--dd-text-muted)', fontWeight: 600, background: '#f8fafc', padding: '3px 10px', borderRadius: 9999, border: '1px solid var(--dd-border)' }}>
+            Past 6 Months
+          </span>
         </div>
 
         <div className="kpi-grid-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem' }}>
@@ -466,14 +461,9 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigateTab })
               <Users size={18} color="var(--dd-primary-teal)" />
               <span>Patients Overview</span>
             </div>
-            <button 
-              className="card-view-all-link" 
-              onClick={() => onNavigateTab('patients')}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.82rem', fontWeight: 600, color: 'var(--dd-text-muted)', background: 'transparent', border: 'none', cursor: 'pointer' }}
-            >
-              <span>View all</span>
-              <ChevronRight size={14} />
-            </button>
+          <span style={{ fontSize: '0.78rem', color: 'var(--dd-text-muted)', fontWeight: 600, background: '#f8fafc', padding: '3px 10px', borderRadius: 9999, border: '1px solid var(--dd-border)' }}>
+            Demographic Inflow
+          </span>
           </div>
 
           {/* Legend matching screenshot */}
