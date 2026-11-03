@@ -82,6 +82,7 @@ interface DentalContextType {
 
   // Server Connection Status
   isServerConnected: boolean;
+  lastSyncedAt: Date | null;
   refreshFromBackend: () => Promise<void>;
 
   // Permissions helper
@@ -151,6 +152,7 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   });
 
   const [isServerConnected, setIsServerConnected] = useState<boolean>(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(new Date());
 
   // Synchronize current user to localStorage
   useEffect(() => {
@@ -254,6 +256,8 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           console.warn('Admin fetch bypassed:', e);
         }
       }
+      setIsServerConnected(true);
+      setLastSyncedAt(new Date());
     } catch (e) {
       console.warn('Backend unavailable, operating on local cache:', e);
       setIsServerConnected(false);
@@ -537,7 +541,9 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     logAudit('CREATE', 'Invoice', invoiceNumber, `Created invoice #${invoiceNumber} total $${data.totalAmount}`);
 
     if (isServerConnected) {
-      api.createInvoice(newInvoice).catch(err => console.error('Failed to sync invoice to server:', err));
+      api.createInvoice(newInvoice)
+        .then(() => refreshFinancialReports())
+        .catch(err => console.error('Failed to sync invoice to server:', err));
     }
 
     return newInvoice;
@@ -572,7 +578,9 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     logAudit('PAYMENT', 'Payment', receiptNumber, `Received payment $${newPayment.amount} via ${newPayment.paymentMethod}`);
 
     if (isServerConnected) {
-      api.recordPayment(paymentData).catch(err => console.error('Failed to sync payment to server:', err));
+      api.recordPayment(paymentData)
+        .then(() => refreshFinancialReports())
+        .catch(err => console.error('Failed to sync payment to server:', err));
     }
 
     return newPayment;
@@ -692,6 +700,7 @@ export const DentalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       restoreDatabaseBackup,
       resetToFactoryDefaults,
       isServerConnected,
+      lastSyncedAt,
       refreshFromBackend,
       hasPermission
     }}>

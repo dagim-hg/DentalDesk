@@ -231,6 +231,7 @@ export interface FinancialSnapshot {
 }
 
 export interface PatientsOverview {
+  totalPatients?: number;
   newPatients: number;
   returningPatients: number;
   satisfactionScore: number;
