@@ -14,6 +14,15 @@ export interface User {
   email: string;
   phone: string;
   avatar?: string;
+  isActive?: boolean;
+  licenseNumber?: string;
+  specialization?: string;
+  assignedChair?: string;
+  employmentType?: string;
+  workSchedule?: string;
+  emergencyContact?: string;
+  notes?: string;
+  createdAt?: string;
 }
 
 export interface Patient {

@@ -29,7 +29,14 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigateTab })
     title: 'Associate Dentist',
     email: '',
     phone: '',
-    password: 'DentalDesk@2026'
+    password: 'DentalDesk@2026',
+    licenseNumber: '',
+    specialization: 'General Dentistry',
+    assignedChair: 'Chair 1 (Main Operatory)',
+    employmentType: 'Full-Time',
+    workSchedule: 'Mon-Fri 08:30 - 17:00',
+    emergencyContact: '',
+    notes: ''
   });
 
   // Manual Trigger for Instant Real-Time Sync
@@ -95,7 +102,14 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigateTab })
         title: 'Associate Dentist',
         email: '',
         phone: '',
-        password: 'DentalDesk@2026'
+        password: 'DentalDesk@2026',
+        licenseNumber: '',
+        specialization: 'General Dentistry',
+        assignedChair: 'Chair 1 (Main Operatory)',
+        employmentType: 'Full-Time',
+        workSchedule: 'Mon-Fri 08:30 - 17:00',
+        emergencyContact: '',
+        notes: ''
       });
       await refreshFromBackend();
     } catch (err: any) {
@@ -717,6 +731,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigateTab })
             <thead>
               <tr>
                 <th>Staff Member</th>
+                <th>Specialization & Chair</th>
                 <th>Role Assignment</th>
                 <th>Status</th>
               </tr>
@@ -731,8 +746,16 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigateTab })
                       </div>
                       <div>
                         <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>{u.fullName}</div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--dd-text-muted)' }}>{u.username}</div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--dd-text-muted)' }}>{u.username} · {u.title || 'Staff'}</div>
                       </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--dd-text-dark)' }}>
+                      {u.specialization || (u.role === 'ROLE_DENTIST' ? 'General Dentistry' : 'Front Office')}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--dd-text-muted)' }}>
+                      {u.assignedChair || 'Chair 1'} {u.licenseNumber ? `· Lic: ${u.licenseNumber}` : ''}
                     </div>
                   </td>
                   <td>
@@ -851,92 +874,278 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigateTab })
         </div>
       </div>
 
-      {/* Add Staff Modal */}
+      {/* Add Staff Modal - Comprehensive Clinic Information */}
       {showAddStaffModal && (
         <div className="modal-overlay" onClick={() => setShowAddStaffModal(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 500 }}>
-            <div className="modal-header">
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>Create New Staff Account</h3>
-              <button className="btn-outline" onClick={() => setShowAddStaffModal(false)}>✕</button>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680, maxHeight: '92vh', overflowY: 'auto', padding: '1.75rem' }}>
+            <div className="modal-header" style={{ marginBottom: '0.75rem' }}>
+              <div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--dd-lime-light)', color: '#3f6212', padding: '3px 10px', borderRadius: 20, fontSize: '0.72rem', fontWeight: 700, marginBottom: 4 }}>
+                  <UserPlus size={12} />
+                  <span>PERSONNEL PROVISIONING</span>
+                </div>
+                <h3 style={{ fontSize: '1.35rem', fontWeight: 800, margin: 0, color: 'var(--dd-text-dark)' }}>
+                  Create New Staff Account
+                </h3>
+                <p style={{ fontSize: '0.8rem', color: 'var(--dd-text-muted)', margin: '4px 0 0' }}>
+                  Register clinical staff credentials, practice assignment, shift schedule, and secure workstation access.
+                </p>
+              </div>
+              <button className="btn-outline" onClick={() => setShowAddStaffModal(false)} style={{ borderRadius: 9999, width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
             </div>
 
-            <form onSubmit={handleCreateStaff} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
-              <div>
-                <label style={{ fontSize: '0.82rem', fontWeight: 700, display: 'block', marginBottom: '0.35rem' }}>
-                  Full Legal Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Dr. Arthur Conan"
-                  value={newStaffForm.fullName}
-                  onChange={(e) => setNewStaffForm({ ...newStaffForm, fullName: e.target.value })}
-                  style={{ width: '100%', boxSizing: 'border-box', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1px solid var(--dd-border-strong)' }}
-                />
+            <form onSubmit={handleCreateStaff} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '0.5rem' }}>
+              
+              {/* Section 1: Account Identity & Access */}
+              <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: 14, border: '1px solid var(--dd-border)' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--dd-primary-teal)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <ShieldCheck size={14} />
+                  <span>1. Identity & System Credentials</span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '0.85rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: '0.3rem', color: 'var(--dd-text-dark)' }}>
+                      Full Legal Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Dr. Arthur Conan, DDS"
+                      value={newStaffForm.fullName}
+                      onChange={(e) => setNewStaffForm({ ...newStaffForm, fullName: e.target.value })}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid var(--dd-border-strong)', fontSize: '0.85rem' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: '0.3rem', color: 'var(--dd-text-dark)' }}>
+                      Username (Workstation Login) *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. arthur.c"
+                      value={newStaffForm.username}
+                      onChange={(e) => setNewStaffForm({ ...newStaffForm, username: e.target.value })}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid var(--dd-border-strong)', fontSize: '0.85rem', fontFamily: 'monospace' }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '0.85rem', marginTop: '0.75rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: '0.3rem', color: 'var(--dd-text-dark)' }}>
+                      Role Assignment *
+                    </label>
+                    <select
+                      value={newStaffForm.role}
+                      onChange={(e) => setNewStaffForm({ ...newStaffForm, role: e.target.value as UserRole })}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid var(--dd-border-strong)', fontSize: '0.85rem', fontWeight: 600, background: '#fff' }}
+                    >
+                      <option value="ROLE_DENTIST">ROLE_DENTIST — Clinical Provider</option>
+                      <option value="ROLE_RECEPTIONIST">ROLE_RECEPTIONIST — Front Desk Operations</option>
+                      <option value="ROLE_ASSISTANT">ROLE_ASSISTANT — Dental Assistant Station</option>
+                      <option value="ROLE_OWNER">ROLE_OWNER — Managing Partner / Executive</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: '0.3rem', color: 'var(--dd-text-dark)' }}>
+                      Initial Password *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newStaffForm.password}
+                      onChange={(e) => setNewStaffForm({ ...newStaffForm, password: e.target.value })}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid var(--dd-border-strong)', fontSize: '0.85rem', fontFamily: 'monospace' }}
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label style={{ fontSize: '0.82rem', fontWeight: 700, display: 'block', marginBottom: '0.35rem' }}>
-                  Username *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. arthur.c"
-                  value={newStaffForm.username}
-                  onChange={(e) => setNewStaffForm({ ...newStaffForm, username: e.target.value })}
-                  style={{ width: '100%', boxSizing: 'border-box', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1px solid var(--dd-border-strong)' }}
-                />
+              {/* Section 2: Clinical & Practice Assignment */}
+              <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: 14, border: '1px solid var(--dd-border)' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--dd-primary-teal)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Stethoscope size={14} />
+                  <span>2. Clinical & Practice Assignment</span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: '0.3rem', color: 'var(--dd-text-dark)' }}>
+                      Job Title
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Associate Orthodontist / Lead RDA"
+                      value={newStaffForm.title}
+                      onChange={(e) => setNewStaffForm({ ...newStaffForm, title: e.target.value })}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid var(--dd-border-strong)', fontSize: '0.85rem' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: '0.3rem', color: 'var(--dd-text-dark)' }}>
+                      Dental Board License / Reg #
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. DDS-784920 / RDA-55412"
+                      value={newStaffForm.licenseNumber}
+                      onChange={(e) => setNewStaffForm({ ...newStaffForm, licenseNumber: e.target.value })}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid var(--dd-border-strong)', fontSize: '0.85rem' }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem', marginTop: '0.75rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: '0.3rem', color: 'var(--dd-text-dark)' }}>
+                      Specialization / Clinical Department
+                    </label>
+                    <select
+                      value={newStaffForm.specialization}
+                      onChange={(e) => setNewStaffForm({ ...newStaffForm, specialization: e.target.value })}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid var(--dd-border-strong)', fontSize: '0.85rem', background: '#fff' }}
+                    >
+                      <option value="General & Cosmetic Dentistry">General & Cosmetic Dentistry</option>
+                      <option value="Orthodontics & Dentofacial">Orthodontics & Dentofacial</option>
+                      <option value="Periodontics & Implantology">Periodontics & Implantology</option>
+                      <option value="Endodontics (Root Canal)">Endodontics (Root Canal)</option>
+                      <option value="Oral & Maxillofacial Surgery">Oral & Maxillofacial Surgery</option>
+                      <option value="Pediatric Dentistry">Pediatric Dentistry</option>
+                      <option value="Dental Hygiene & Prophylaxis">Dental Hygiene & Prophylaxis</option>
+                      <option value="Chairside Assisting & Sterilization">Chairside Assisting & Sterilization</option>
+                      <option value="Front Desk & Insurance Coordination">Front Desk & Insurance Coordination</option>
+                      <option value="Practice Management & Administration">Practice Management & Administration</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: '0.3rem', color: 'var(--dd-text-dark)' }}>
+                      Assigned Primary Operatory / Chair
+                    </label>
+                    <select
+                      value={newStaffForm.assignedChair}
+                      onChange={(e) => setNewStaffForm({ ...newStaffForm, assignedChair: e.target.value })}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid var(--dd-border-strong)', fontSize: '0.85rem', background: '#fff' }}
+                    >
+                      <option value="Chair 1 (Main Operatory)">Chair 1 (Main Operatory)</option>
+                      <option value="Chair 2 (Pediatric/Hygiene)">Chair 2 (Pediatric/Hygiene)</option>
+                      <option value="Chair 3 (Surgery/Endo)">Chair 3 (Surgery/Endo)</option>
+                      <option value="Reception Station 1">Reception Station 1</option>
+                      <option value="Reception Station 2">Reception Station 2</option>
+                      <option value="Operatory Floater">Operatory Floater (All Chairs)</option>
+                      <option value="Executive Management Office">Executive Management Office</option>
+                    </select>
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label style={{ fontSize: '0.82rem', fontWeight: 700, display: 'block', marginBottom: '0.35rem' }}>
-                  Role Assignment *
-                </label>
-                <select
-                  value={newStaffForm.role}
-                  onChange={(e) => setNewStaffForm({ ...newStaffForm, role: e.target.value as UserRole })}
-                  style={{ width: '100%', boxSizing: 'border-box', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1px solid var(--dd-border-strong)' }}
-                >
-                  <option value="ROLE_DENTIST">Dentist (Clinical Provider)</option>
-                  <option value="ROLE_RECEPTIONIST">Receptionist (Front Desk)</option>
-                  <option value="ROLE_ASSISTANT">Dental Assistant</option>
-                  <option value="ROLE_OWNER">Owner / Managing Partner</option>
-                </select>
+              {/* Section 3: Contact & Shift Schedule */}
+              <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: 14, border: '1px solid var(--dd-border)' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--dd-primary-teal)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Clock size={14} />
+                  <span>3. Employment, Contact & Shift Schedule</span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: '0.3rem', color: 'var(--dd-text-dark)' }}>
+                      Clinic Work Email
+                    </label>
+                    <input
+                      type="email"
+                      placeholder="e.g. arthur.c@dentaldesk.local"
+                      value={newStaffForm.email}
+                      onChange={(e) => setNewStaffForm({ ...newStaffForm, email: e.target.value })}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid var(--dd-border-strong)', fontSize: '0.85rem' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: '0.3rem', color: 'var(--dd-text-dark)' }}>
+                      Direct Mobile / Phone
+                    </label>
+                    <input
+                      type="tel"
+                      placeholder="e.g. +1 (555) 345-6789"
+                      value={newStaffForm.phone}
+                      onChange={(e) => setNewStaffForm({ ...newStaffForm, phone: e.target.value })}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid var(--dd-border-strong)', fontSize: '0.85rem' }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem', marginTop: '0.75rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: '0.3rem', color: 'var(--dd-text-dark)' }}>
+                      Employment Type
+                    </label>
+                    <select
+                      value={newStaffForm.employmentType}
+                      onChange={(e) => setNewStaffForm({ ...newStaffForm, employmentType: e.target.value })}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid var(--dd-border-strong)', fontSize: '0.85rem', background: '#fff' }}
+                    >
+                      <option value="Full-Time">Full-Time (Permanent)</option>
+                      <option value="Part-Time">Part-Time</option>
+                      <option value="Locum / Contract">Locum / Contract Provider</option>
+                      <option value="Intern / Resident">Intern / Resident</option>
+                      <option value="Managing Partner">Managing Partner</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: '0.3rem', color: 'var(--dd-text-dark)' }}>
+                      Work Schedule / Clinic Shift
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Mon-Fri 08:30 - 17:00"
+                      value={newStaffForm.workSchedule}
+                      onChange={(e) => setNewStaffForm({ ...newStaffForm, workSchedule: e.target.value })}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid var(--dd-border-strong)', fontSize: '0.85rem' }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ marginTop: '0.75rem' }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: '0.3rem', color: 'var(--dd-text-dark)' }}>
+                    Emergency Contact (Name & Phone)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Sarah Conan (+1 555-0199)"
+                    value={newStaffForm.emergencyContact}
+                    onChange={(e) => setNewStaffForm({ ...newStaffForm, emergencyContact: e.target.value })}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid var(--dd-border-strong)', fontSize: '0.85rem' }}
+                  />
+                </div>
+
+                <div style={{ marginTop: '0.75rem' }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: '0.3rem', color: 'var(--dd-text-dark)' }}>
+                    Qualifications, Certifications & Notes
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="e.g. BLS / CPR Certified, DEA Registered, Invisalign Accredited Provider"
+                    value={newStaffForm.notes}
+                    onChange={(e) => setNewStaffForm({ ...newStaffForm, notes: e.target.value })}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid var(--dd-border-strong)', fontSize: '0.85rem', resize: 'vertical' }}
+                  />
+                </div>
               </div>
 
-              <div>
-                <label style={{ fontSize: '0.82rem', fontWeight: 700, display: 'block', marginBottom: '0.35rem' }}>
-                  Job Title
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Associate Orthodontist"
-                  value={newStaffForm.title}
-                  onChange={(e) => setNewStaffForm({ ...newStaffForm, title: e.target.value })}
-                  style={{ width: '100%', boxSizing: 'border-box', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1px solid var(--dd-border-strong)' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: '0.82rem', fontWeight: 700, display: 'block', marginBottom: '0.35rem' }}>
-                  Initial Password *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newStaffForm.password}
-                  onChange={(e) => setNewStaffForm({ ...newStaffForm, password: e.target.value })}
-                  style={{ width: '100%', boxSizing: 'border-box', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1px solid var(--dd-border-strong)' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
-                <button type="button" className="btn-outline" onClick={() => setShowAddStaffModal(false)}>
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.25rem' }}>
+                <button type="button" className="btn-outline" onClick={() => setShowAddStaffModal(false)} style={{ padding: '8px 18px', borderRadius: 10 }}>
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary-teal">
-                  Create Staff Account
+                <button type="submit" className="btn-primary-teal" style={{ padding: '8px 22px', borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700 }}>
+                  <UserPlus size={16} />
+                  <span>Create Staff Account</span>
                 </button>
               </div>
             </form>

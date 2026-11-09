@@ -30,7 +30,7 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Global authentication extractor (populates req.user if Bearer token present)
+// Global authentication extractor 
 app.use('/api', authenticate);
 
 // Request logging
