@@ -665,3 +665,528 @@
   }
 }
 
+/* ==============================================================
+   DENTIST OPERATORY & CLINICAL CHART (INSPIRATION MATCHING)
+   ============================================================== */
+
+/* 3-Column Operatory Grid */
+.operatory-grid {
+  display: grid;
+  grid-template-columns: 270px minmax(0, 1fr) 280px;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 1280px) {
+  .operatory-grid {
+    grid-template-columns: 250px minmax(0, 1fr);
+  }
+  .operatory-right-col {
+    grid-column: span 2;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+}
+
+@media (max-width: 880px) {
+  .operatory-grid {
+    grid-template-columns: 1fr;
+  }
+  .operatory-right-col {
+    grid-column: span 1;
+    grid-template-columns: 1fr;
+  }
+}
+
+/* White Card Containers */
+.operatory-card {
+  background: #ffffff;
+  border: 1px solid #e3e6dd;
+  border-radius: 14px;
+  padding: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.operatory-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #f1f3ee;
+}
+
+/* Timeline Column */
+.timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.timeline-item {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 0.82rem;
+  background: #fafbfa;
+}
+
+.timeline-item:hover {
+  background: #f3f5f0;
+  border-color: #e2e5dc;
+}
+
+.timeline-item.active {
+  background: #e6f3f4;
+  border-color: #005963;
+  box-shadow: 0 0 0 1px #005963;
+}
+
+.timeline-time-col {
+  width: 44px;
+  font-weight: 700;
+  color: #334155;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
+.timeline-info-col {
+  flex: 1;
+  min-width: 0;
+}
+
+.timeline-patient-name {
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.timeline-subtext {
+  font-size: 0.73rem;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.timeline-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.status-dot.completed { background: #10b981; }
+.status-dot.in_operatory { background: #005963; }
+.status-dot.arrived { background: #f59e0b; }
+.status-dot.confirmed { background: #94a3b8; }
+.status-dot.no_show { background: #ef4444; }
+
+/* In-Operatory Center Stage */
+.stage-patient-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.stage-patient-name {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.stage-demographics {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+/* Alert tags */
+.alert-tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.alert-tag-pill.allergy {
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #f87171;
+}
+
+.alert-tag-pill.neutral {
+  color: #334155;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+}
+
+.alert-tag-pill.urgent {
+  color: #9a3412;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+}
+
+/* 4-Stat Box Grid */
+.stage-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+  background: #fafbfa;
+  border: 1px solid #eef0e9;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.stage-stat-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.stage-stat-label {
+  font-size: 0.72rem;
+  color: #64748b;
+  margin-bottom: 2px;
+}
+
+.stage-stat-value {
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+/* Chief complaint block */
+.complaint-box {
+  background: #fafbfa;
+  border: 1px solid #eef0e9;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.complaint-label {
+  font-size: 0.73rem;
+  color: #64748b;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.complaint-text {
+  font-size: 0.88rem;
+  color: #1e293b;
+  font-weight: 500;
+}
+
+/* Action Buttons */
+.stage-buttons-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.btn-teal-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #005963;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.65rem 1.25rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-teal-primary:hover {
+  background: #076d78;
+}
+
+.btn-outline-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0.65rem 1.15rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-outline-pill:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+/* Procedures Table */
+.procedures-table-container {
+  margin-top: 0.5rem;
+}
+
+.procedures-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.procedures-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.procedures-table th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  color: #64748b;
+  font-size: 0.73rem;
+  font-weight: 600;
+  border-bottom: 1px solid #eef0e9;
+}
+
+.procedures-table td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid #f1f3ee;
+  color: #1e293b;
+}
+
+.state-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.state-badge.recorded {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.state-badge.draft {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+/* Waiting Queue Column */
+.queue-card-item {
+  padding: 0.75rem;
+  border-radius: 10px;
+  border: 1px solid #eef0e9;
+  background: #fafbfa;
+  margin-bottom: 0.5rem;
+}
+
+.queue-card-item.urgent-item {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+/* Dental Chart (Image 1 Layout) */
+.chart-view-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .chart-view-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Odontogram anatomical grid */
+.odontogram-arch-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1rem 0;
+  background: #fafbfa;
+  border-radius: 12px;
+  border: 1px solid #eef0e9;
+  margin-bottom: 1rem;
+}
+
+.arch-teeth-row {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 0.5rem;
+  overflow-x: auto;
+}
+
+.arch-quadrant-group {
+  display: flex;
+  gap: 3px;
+}
+
+.arch-divider {
+  width: 1.5px;
+  background: #cbd5e1;
+  margin: 0 4px;
+}
+
+.fdi-tooth-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  padding: 4px 2px;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.fdi-tooth-wrapper:hover {
+  background: #f1f5f9;
+}
+
+.fdi-tooth-wrapper.selected {
+  background: #e6f3f4;
+  outline: 2px solid #005963;
+}
+
+.fdi-tooth-wrapper.focused-tooth {
+  outline: 2px dashed #005963;
+}
+
+.fdi-tooth-number {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #475569;
+  margin-bottom: 2px;
+}
+
+/* Selected Tooth Bar */
+.selected-tooth-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.tooth-badge-large {
+  width: 38px;
+  height: 38px;
+  background: #005963;
+  color: #ffffff;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+.surface-btn-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.surface-toggle-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s ease;
+}
+
+.surface-toggle-btn.active {
+  background: #005963;
+  border-color: #005963;
+  color: #ffffff;
+}
+
+/* SOAP encounter fields */
+.soap-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.soap-field-title {
+  font-size: 0.73rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 4px;
+  letter-spacing: 0.04em;
+}
+
+.soap-text-input {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: #1e293b;
+  background: #ffffff;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.soap-text-input:focus {
+  outline: none;
+  border-color: #005963;
+  box-shadow: 0 0 0 2px rgba(0, 89, 99, 0.15);
+}
+
+/* Treatment plan list */
+.plan-item-row {
+  display: grid;
+  grid-template-columns: 24px 1fr 40px 80px 80px;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.6rem 0.5rem;
+  border-bottom: 1px solid #f1f3ee;
+  font-size: 0.82rem;
+}
+
+

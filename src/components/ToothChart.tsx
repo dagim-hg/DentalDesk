@@ -1,87 +1,203 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDental } from '../context/DentalContext';
+import { ToothRecord, ToothCondition, ToothSurface, Patient } from '../types/dental';
+import { AnatomicalToothSVG } from './dental/AnatomicalToothSVG';
+import { getToothName, formatToothDisplay } from '../utils/dentalToothUtils';
 import { 
-  ToothRecord, ToothCondition, ToothSurface, Patient 
-} from '../types/dental';
-import { 
-  Activity, Check, AlertCircle, FileText, Pill, Stethoscope, 
-  Plus, Save, RefreshCw, Layers 
+  ArrowLeft, Activity, Printer, FileText, Pill, Plus, 
+  Check, Save, Stethoscope, AlertTriangle, User, 
+  Trash2, ExternalLink, Calendar, ChevronRight, X
 } from 'lucide-react';
 
-// FDI Notation Quadrants
+interface ToothChartProps {
+  onBack?: () => void;
+  patient?: Patient;
+}
+
+interface ProcedureItem {
+  id: string;
+  toothNumber: number | string;
+  surfaces: string;
+  procedureName: string;
+  code: string;
+  state: 'Recorded' | 'Draft';
+  price?: number;
+}
+
+interface TreatmentPlanItem {
+  id: string;
+  priority: number;
+  procedureName: string;
+  toothNumber: number | string;
+  sessions: string;
+  cost: number;
+}
+
+// FDI Quadrants
 const ADULT_UPPER_RIGHT = [18, 17, 16, 15, 14, 13, 12, 11];
 const ADULT_UPPER_LEFT  = [21, 22, 23, 24, 25, 26, 27, 28];
 const ADULT_LOWER_RIGHT = [48, 47, 46, 45, 44, 43, 42, 41];
 const ADULT_LOWER_LEFT  = [31, 32, 33, 34, 35, 36, 37, 38];
 
-const PEDIATRIC_UPPER = [55, 54, 53, 52, 51, 61, 62, 63, 64, 65];
-const PEDIATRIC_LOWER = [85, 84, 83, 82, 81, 71, 72, 73, 74, 75];
-
-const CONDITION_COLORS: Record<ToothCondition, { bg: string; border: string; label: string }> = {
-  HEALTHY: { bg: '#1e293b', border: '#475569', label: 'Healthy / Sound' },
-  CARIES: { bg: 'rgba(239, 68, 68, 0.35)', border: '#ef4444', label: 'Active Caries (Decay)' },
-  FILLED: { bg: 'rgba(14, 165, 233, 0.35)', border: '#0ea5e9', label: 'Restored / Filling' },
-  CROWN: { bg: 'rgba(245, 158, 11, 0.35)', border: '#f59e0b', label: 'Crown / Prosthetic' },
-  ROOT_CANAL: { bg: 'rgba(139, 92, 246, 0.35)', border: '#8b5cf6', label: 'Root Canal Treated' },
-  MISSING: { bg: '#0b1120', border: '#334155', label: 'Missing / Unerupted' },
-  EXTRACTION_NEEDED: { bg: 'rgba(225, 29, 72, 0.35)', border: '#e11d48', label: 'Extraction Indicated' },
-  IMPLANT: { bg: 'rgba(16, 185, 129, 0.35)', border: '#10b981', label: 'Dental Implant' },
-  BRIDGE: { bg: 'rgba(168, 85, 247, 0.35)', border: '#a855f7', label: 'Bridge Abutment' }
-};
-
-export const ToothChart: React.FC = () => {
-  const { selectedPatient, saveVisit, getPatientToothRecords, currentUser, hasPermission } = useDental();
-
-  const [dentitionType, setDentitionType] = useState<'ADULT' | 'PEDIATRIC'>('ADULT');
-  const [activeTool, setActiveTool] = useState<ToothCondition>('CARIES');
-  const [selectedTooth, setSelectedTooth] = useState<number | null>(36);
+export const ToothChart: React.FC<ToothChartProps> = ({ onBack, patient: propPatient }) => {
+  const { 
+    selectedPatient: contextPatient, 
+    saveVisit, 
+    getPatientToothRecords, 
+    currentUser, 
+    hasPermission,
+    getPatientVisits
+  } = useDental();
   
-  // Local active visit state
+  const navigate = useNavigate();
+  const currentPatient = propPatient || contextPatient;
+
+  const [numberingSystem, setNumberingSystem] = useState<'FDI' | 'Universal'>('FDI');
+  const [selectedTooth, setSelectedTooth] = useState<number>(46);
+  const [activeTool, setActiveTool] = useState<ToothCondition>('ROOT_CANAL');
+  const [showPatientDetailsModal, setShowPatientDetailsModal] = useState(false);
+  const [showAddProcedureModal, setShowAddProcedureModal] = useState(false);
+  const [showRxPrintModal, setShowRxPrintModal] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // Local active visit tooth records mapped by toothNumber
   const [records, setRecords] = useState<Record<number, ToothRecord>>(() => {
-    const existing = selectedPatient ? getPatientToothRecords(selectedPatient.id) : [];
+    if (!currentPatient) return {};
+    const existing = getPatientToothRecords(currentPatient.id);
     const map: Record<number, ToothRecord> = {};
     existing.forEach(r => { map[r.toothNumber] = r; });
+    // Default initial clinical findings for Dmitri Sokolov (#46)
+    if (currentPatient.id === 1 && !map[46]) {
+      map[46] = { toothNumber: 46, condition: 'ROOT_CANAL', surfaces: ['O', 'M', 'D'], diagnosedDate: '2026-11-09' };
+      map[36] = { toothNumber: 36, condition: 'FILLED', surfaces: ['O', 'M'], diagnosedDate: '2024-03-12' };
+    }
     return map;
   });
 
-  const [soapNotes, setSoapNotes] = useState<string>(
-    `SUBJECTIVE: Patient reports localized sensitivity to temperature on quadrant.\nOBJECTIVE: Clinical exploration shows deep cavitation with softened dentin.\nASSESSMENT: Dental caries requiring restorative intervention.\nPLAN: Excavate decay under local anesthesia, apply bonding agent, restore with composite resin.`
-  );
-  const [treatmentPlan, setTreatmentPlan] = useState<string>('Restorative composite filling & fluoride remineralization');
-  const [prescriptions, setPrescriptions] = useState<string>('Amoxicillin 500mg (or Clindamycin if penicillin allergy)');
-  const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
+  // Re-sync when patient changes
+  useEffect(() => {
+    if (currentPatient) {
+      const existing = getPatientToothRecords(currentPatient.id);
+      const map: Record<number, ToothRecord> = {};
+      existing.forEach(r => { map[r.toothNumber] = r; });
+      if (currentPatient.id === 1 && !map[46]) {
+        map[46] = { toothNumber: 46, condition: 'ROOT_CANAL', surfaces: ['O', 'M', 'D'], diagnosedDate: '2026-11-09' };
+        map[36] = { toothNumber: 36, condition: 'FILLED', surfaces: ['O', 'M'], diagnosedDate: '2024-03-12' };
+      }
+      setRecords(map);
+    }
+  }, [currentPatient?.id]);
 
-  if (!selectedPatient) {
+  // Procedures Table State
+  const [procedures, setProcedures] = useState<ProcedureItem[]>([
+    { id: 'p1', toothNumber: 46, surfaces: 'O, M, D', procedureName: 'Access opening and pulp extirpation', code: 'ENDO-ACC', state: 'Recorded' },
+    { id: 'p2', toothNumber: 46, surfaces: '—', procedureName: 'Working length determination', code: 'ENDO-WL', state: 'Recorded' },
+    { id: 'p3', toothNumber: 46, surfaces: '—', procedureName: 'Rubber dam isolation', code: 'ENDO-ISO', state: 'Recorded' },
+    { id: 'p4', toothNumber: 46, surfaces: 'M, D', procedureName: 'Canal shaping to F2', code: 'ENDO-SHP', state: 'Draft' },
+    { id: 'p5', toothNumber: 46, surfaces: '—', procedureName: 'Irrigation, 3% NaOCl', code: 'ENDO-IRR', state: 'Recorded' },
+    { id: 'p6', toothNumber: 46, surfaces: 'O', procedureName: 'Provisional restoration', code: 'REST-PRV', state: 'Draft' }
+  ]);
+
+  // SOAP Encounter State
+  const [encounterTitle, setEncounterTitle] = useState('Root canal, tooth 46');
+  const [chiefComplaint, setChiefComplaint] = useState(
+    currentPatient?.notes || 'Sharp pain lower right, cold sensitivity since 3 November.'
+  );
+  const [examinationFindings, setExaminationFindings] = useState(
+    'Deep distal caries on tooth 46 extending to the pulp. Percussion positive, no swelling, no mobility. Marginal gingiva within normal limits.'
+  );
+  const [diagnosis, setDiagnosis] = useState(
+    'Irreversible pulpitis, permanent mandibular right first molar'
+  );
+  const [diagnosisCode, setDiagnosisCode] = useState('K04.02');
+  const [treatmentNotes, setTreatmentNotes] = useState(
+    'Access opened, mesial and distal canals located. Working lengths 19 mm mesial, 20 mm distal. Shaped to F2, irrigated with 3% NaOCl. Provisional restoration placed.'
+  );
+  const [prescriptionText, setPrescriptionText] = useState('Clindamycin 300 mg, 21 capsules');
+
+  // Treatment Plan State
+  const [treatmentPlanItems, setTreatmentPlanItems] = useState<TreatmentPlanItem[]>([
+    { id: 'tp1', priority: 1, procedureName: 'Root canal treatment', toothNumber: 46, sessions: '1 session', cost: 480 },
+    { id: 'tp2', priority: 1, procedureName: 'Core build-up', toothNumber: 46, sessions: '1 session', cost: 180 },
+    { id: 'tp3', priority: 2, procedureName: 'Porcelain crown', toothNumber: 46, sessions: '1 session', cost: 1150 },
+    { id: 'tp4', priority: 3, procedureName: 'Scaling and polish', toothNumber: '—', sessions: '1 session', cost: 95 }
+  ]);
+
+  // New Procedure Form State
+  const [newProcForm, setNewProcForm] = useState({
+    toothNumber: selectedTooth,
+    surfaces: 'O',
+    procedureName: 'Composite restoration (1 surface)',
+    code: 'D2391',
+    state: 'Draft' as const
+  });
+
+  const handleBack = () => {
+    if (onBack) {
+      onBack();
+    } else {
+      navigate('/dentist');
+    }
+  };
+
+  if (!currentPatient) {
     return (
-      <div className="card-panel" style={{ textAlign: 'center', padding: '3rem' }}>
-        <Stethoscope size={48} color="var(--primary)" style={{ margin: '0 auto 1rem', opacity: 0.6 }} />
-        <h3>No Patient Selected</h3>
-        <p style={{ marginTop: '0.5rem' }}>Select a patient from the Waiting Queue or Patient Registry to open clinical charting.</p>
+      <div className="operatory-card" style={{ textAlign: 'center', padding: '3.5rem 2rem' }}>
+        <Stethoscope size={48} color="#005963" style={{ margin: '0 auto 1rem', opacity: 0.6 }} />
+        <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>No Patient Selected</h3>
+        <p style={{ color: '#64748b', marginTop: '0.4rem', fontSize: '0.88rem' }}>
+          Select a patient from the Operatory schedule or queue to open clinical charting.
+        </p>
+        <button className="btn-teal-primary" onClick={handleBack} style={{ marginTop: '1.25rem' }}>
+          <ArrowLeft size={16} /> Return to Operatory
+        </button>
       </div>
     );
   }
 
-  // Toggle or stamp condition on tooth
+  // Tooth selection & surface toggle
   const handleToothClick = (toothNum: number) => {
-    if (!hasPermission('CLINICAL_WRITE')) {
-      alert('Access Restricted: Only Dentists and Clinical Directors can commit modifications to permanent health records.');
-      return;
-    }
-
     setSelectedTooth(toothNum);
+    setNewProcForm(prev => ({ ...prev, toothNumber: toothNum }));
+  };
+
+  const toggleSurface = (surface: ToothSurface) => {
+    if (!selectedTooth) return;
+    setHasUnsavedChanges(true);
     setRecords(prev => {
-      const existing = prev[toothNum];
-      if (existing && existing.condition === activeTool) {
-        // Toggle back to healthy
-        const updated = { ...prev };
-        delete updated[toothNum];
-        return updated;
-      }
+      const existing = prev[selectedTooth] || {
+        toothNumber: selectedTooth,
+        condition: activeTool,
+        surfaces: [],
+        diagnosedDate: new Date().toISOString().slice(0, 10)
+      };
+      const hasSurface = existing.surfaces.includes(surface);
+      const updatedSurfaces = hasSurface
+        ? existing.surfaces.filter(s => s !== surface)
+        : [...existing.surfaces, surface];
+
       return {
         ...prev,
-        [toothNum]: {
-          toothNumber: toothNum,
-          condition: activeTool,
+        [selectedTooth]: {
+          ...existing,
+          surfaces: updatedSurfaces
+        }
+      };
+    });
+  };
+
+  const handleApplyConditionToSelected = (condition: ToothCondition) => {
+    setHasUnsavedChanges(true);
+    setActiveTool(condition);
+    setRecords(prev => {
+      const existing = prev[selectedTooth];
+      return {
+        ...prev,
+        [selectedTooth]: {
+          toothNumber: selectedTooth,
+          condition,
           surfaces: existing?.surfaces || ['O'],
           diagnosedDate: new Date().toISOString().slice(0, 10)
         }
@@ -89,391 +205,918 @@ export const ToothChart: React.FC = () => {
     });
   };
 
-  // Toggle surface (M, O, D, B, L) for selected tooth
-  const toggleSurface = (surface: ToothSurface) => {
-    if (!selectedTooth) return;
-    setRecords(prev => {
-      const current = prev[selectedTooth] || {
-        toothNumber: selectedTooth,
-        condition: activeTool,
-        surfaces: []
-      };
-      const hasSurface = current.surfaces.includes(surface);
-      const newSurfaces = hasSurface 
-        ? current.surfaces.filter(s => s !== surface)
-        : [...current.surfaces, surface];
-
-      return {
-        ...prev,
-        [selectedTooth]: {
-          ...current,
-          surfaces: newSurfaces
-        }
-      };
-    });
+  const handleAddProcedure = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newId = `p${Date.now()}`;
+    const newProc: ProcedureItem = {
+      id: newId,
+      toothNumber: newProcForm.toothNumber,
+      surfaces: newProcForm.surfaces,
+      procedureName: newProcForm.procedureName,
+      code: newProcForm.code,
+      state: newProcForm.state
+    };
+    setProcedures(prev => [...prev, newProc]);
+    setShowAddProcedureModal(false);
+    setHasUnsavedChanges(true);
   };
 
-  const handleSaveVisit = () => {
+  const handleDeleteProcedure = (id: string) => {
+    setProcedures(prev => prev.filter(p => p.id !== id));
+    setHasUnsavedChanges(true);
+  };
+
+  const handleSaveEncounter = () => {
     const toothRecordsArray = Object.values(records);
     saveVisit({
-      patientId: selectedPatient.id,
+      patientId: currentPatient.id,
       dentistId: currentUser.id,
       visitDatetime: new Date().toISOString(),
-      chiefComplaint: selectedPatient.notes || 'Dental evaluation',
-      clinicalNotes: soapNotes,
-      diagnosis: `${toothRecordsArray.length} recorded dental conditions/procedures`,
-      treatmentPlan,
-      prescriptions,
+      chiefComplaint,
+      clinicalNotes: `EXAMINATION FINDINGS: ${examinationFindings}\nDIAGNOSIS: ${diagnosis} (${diagnosisCode})\nTREATMENT NOTES: ${treatmentNotes}`,
+      diagnosis: `${diagnosis} (${diagnosisCode})`,
+      treatmentPlan: treatmentPlanItems.map(i => `${i.procedureName} (#${i.toothNumber}) - $${i.cost}`).join('\n'),
+      prescriptions: prescriptionText,
       toothRecords: toothRecordsArray,
       createdBy: currentUser.id
     });
 
     setSaveSuccess(true);
+    setHasUnsavedChanges(false);
     setTimeout(() => setSaveSuccess(false), 3000);
   };
 
-  const currentToothRecord = selectedTooth ? records[selectedTooth] : null;
+  const currentToothRecord = records[selectedTooth];
+  const totalEstimatedCost = treatmentPlanItems.reduce((acc, item) => acc + item.cost, 0);
+
+  const calculateAge = (dobString: string) => {
+    try {
+      const birth = new Date(dobString);
+      const now = new Date();
+      let age = now.getFullYear() - birth.getFullYear();
+      const m = now.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+      return age > 0 ? age : 0;
+    } catch {
+      return 35;
+    }
+  };
+
+  const age = calculateAge(currentPatient.dob);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {/* Patient Header & Contraindications Warning */}
-      <div className="card-panel" style={{ borderLeft: selectedPatient.isUrgent ? '4px solid var(--danger)' : '4px solid var(--primary)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+    <div style={{ maxWidth: 1380, margin: '0 auto' }}>
+      {/* Top Header Row with Back Button */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '1rem',
+        paddingBottom: '0.75rem',
+        borderBottom: '1px solid #e2e8f0',
+        flexWrap: 'wrap',
+        gap: '0.75rem'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <button
+            onClick={handleBack}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 34,
+              height: 34,
+              borderRadius: 8,
+              border: '1px solid #cbd5e1',
+              background: '#ffffff',
+              cursor: 'pointer',
+              color: '#334155',
+              transition: 'all 0.15s ease'
+            }}
+            title="Return to Operatory"
+          >
+            <ArrowLeft size={18} />
+          </button>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <h2 style={{ fontSize: '1.4rem' }}>{selectedPatient.firstName} {selectedPatient.lastName}</h2>
-              <span className="badge-counter" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--primary)' }}>
-                {selectedPatient.patientCode}
-              </span>
-              {selectedPatient.isUrgent && <span className="badge-urgent">URGENT TRIAGE</span>}
-            </div>
-            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-              DOB: {selectedPatient.dob} • Gender: {selectedPatient.gender} • Insurance: {selectedPatient.insuranceCarrier || 'Self-Pay (Uninsured)'}
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button 
-              className={`btn btn-sm ${dentitionType === 'ADULT' ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setDentitionType('ADULT')}
-            >
-              Adult Dentition (32 Teeth)
-            </button>
-            <button 
-              className={`btn btn-sm ${dentitionType === 'PEDIATRIC' ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setDentitionType('PEDIATRIC')}
-            >
-              Pediatric (Primary)
-            </button>
-          </div>
-        </div>
-
-        {/* High-Contrast Red Warning Banner for Allergies/Contraindications */}
-        {selectedPatient.medicalAlerts && selectedPatient.medicalAlerts.length > 0 && (
-          <div className="medical-alert-box" style={{ marginTop: '1rem' }}>
-            <AlertCircle size={20} color="#f43f5e" style={{ flexShrink: 0 }} />
-            <div>
-              <strong style={{ color: '#fff' }}>CLINICAL CONTRAINDICATION / ALLERGY ALERT:</strong>{' '}
-              {selectedPatient.medicalAlerts.join(' • ')}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Main Odontogram & Treatment Suite Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.8fr) minmax(0, 1.2fr)', gap: '1.5rem' }}>
-        {/* Left: Interactive Tooth Chart */}
-        <div className="card-panel">
-          <div className="panel-header">
-            <div className="panel-title">
-              <Activity size={18} color="var(--primary)" />
-              <span>Interactive FDI Odontogram</span>
-            </div>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              ISO 3950 Two-Digit Notation • Click tooth to apply condition
+            <h1 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+              Patient record
+            </h1>
+            <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
+              Monday, 9 November 2026 • Operatory Bay 1
             </span>
           </div>
-
-          {/* Condition Palette */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem', marginBottom: '1.5rem', background: 'var(--bg-input)', padding: '0.75rem', borderRadius: 'var(--radius-md)' }}>
-            {(Object.keys(CONDITION_COLORS) as ToothCondition[]).map((cond) => {
-              const meta = CONDITION_COLORS[cond];
-              const isActive = activeTool === cond;
-              return (
-                <button
-                  key={cond}
-                  onClick={() => setActiveTool(cond)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.4rem',
-                    padding: '0.35rem 0.65rem',
-                    borderRadius: 'var(--radius-sm)',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    background: isActive ? meta.bg : 'var(--bg-card)',
-                    border: `1.5px solid ${isActive ? meta.border : 'var(--border-subtle)'}`,
-                    color: isActive ? '#fff' : 'var(--text-secondary)',
-                    boxShadow: isActive ? `0 0 10px ${meta.border}40` : 'none',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: meta.border }}></span>
-                  {meta.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Tooth Grid Rendering */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
-            {dentitionType === 'ADULT' ? (
-              <>
-                {/* Maxilla (Upper Arch) */}
-                <div>
-                  <div style={{ textAlign: 'center', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.5rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                    Maxillary Arch (Upper Teeth)
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(16, 1fr)', gap: '4px' }}>
-                    {[...ADULT_UPPER_RIGHT, ...ADULT_UPPER_LEFT].map((num) => (
-                      <ToothItem
-                        key={num}
-                        number={num}
-                        record={records[num]}
-                        isSelected={selectedTooth === num}
-                        onClick={() => handleToothClick(num)}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                {/* Mandible (Lower Arch) */}
-                <div>
-                  <div style={{ textAlign: 'center', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.5rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                    Mandibular Arch (Lower Teeth)
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(16, 1fr)', gap: '4px' }}>
-                    {[...ADULT_LOWER_RIGHT.reverse(), ...ADULT_LOWER_LEFT].map((num) => (
-                      <ToothItem
-                        key={num}
-                        number={num}
-                        record={records[num]}
-                        isSelected={selectedTooth === num}
-                        onClick={() => handleToothClick(num)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </>
-            ) : (
-              /* Pediatric Deciduous Arch */
-              <>
-                <div>
-                  <div style={{ textAlign: 'center', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>
-                    Primary Maxillary Arch
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '6px' }}>
-                    {PEDIATRIC_UPPER.map((num) => (
-                      <ToothItem
-                        key={num}
-                        number={num}
-                        record={records[num]}
-                        isSelected={selectedTooth === num}
-                        onClick={() => handleToothClick(num)}
-                      />
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ textAlign: 'center', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>
-                    Primary Mandibular Arch
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '6px' }}>
-                    {PEDIATRIC_LOWER.map((num) => (
-                      <ToothItem
-                        key={num}
-                        number={num}
-                        record={records[num]}
-                        isSelected={selectedTooth === num}
-                        onClick={() => handleToothClick(num)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Selected Tooth Surface Inspector */}
-          {selectedTooth && (
-            <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-glow)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Layers size={16} color="var(--primary)" />
-                  <strong style={{ color: '#fff' }}>Tooth #{selectedTooth} Details & Surfaces</strong>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    ({currentToothRecord?.condition ? CONDITION_COLORS[currentToothRecord.condition].label : 'Healthy'})
-                  </span>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Affected Surfaces:</span>
-                {(['M', 'O', 'D', 'B', 'L'] as ToothSurface[]).map((surface) => {
-                  const isSelected = currentToothRecord?.surfaces.includes(surface);
-                  const labels: Record<ToothSurface, string> = { M: 'Mesial', O: 'Occlusal', D: 'Distal', B: 'Buccal', L: 'Lingual' };
-                  return (
-                    <button
-                      key={surface}
-                      onClick={() => toggleSurface(surface)}
-                      style={{
-                        padding: '0.25rem 0.6rem',
-                        fontSize: '0.75rem',
-                        borderRadius: 'var(--radius-sm)',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        background: isSelected ? 'var(--primary)' : 'var(--bg-input)',
-                        color: isSelected ? '#fff' : 'var(--text-secondary)',
-                        border: `1px solid ${isSelected ? 'var(--primary)' : 'var(--border-subtle)'}`
-                      }}
-                      title={labels[surface]}
-                    >
-                      {surface} ({labels[surface]})
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Right: SOAP Notes, Treatment Plan & Prescriptions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <button
+            className="btn-outline-pill"
+            onClick={() => setShowPatientDetailsModal(true)}
+          >
+            <User size={15} color="#005963" />
+            <span>Patient details</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Patient Header Card (Demographics & Medical Alerts) */}
+      <div className="operatory-card" style={{ marginBottom: '1.25rem', padding: '1.15rem 1.4rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <h2 style={{ fontSize: '1.65rem', fontWeight: 800, margin: 0, color: '#0f172a', letterSpacing: '-0.02em' }}>
+                {currentPatient.firstName} {currentPatient.lastName}
+              </h2>
+            </div>
+            <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '4px' }}>
+              {currentPatient.patientCode} • DOB {currentPatient.dob} ({age} y) • {currentPatient.gender} • Phone: {currentPatient.phone}
+            </div>
+          </div>
+
+          {/* Prominent Allergy & Medical Alert Badges */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {currentPatient.medicalAlerts && currentPatient.medicalAlerts.length > 0 ? (
+              currentPatient.medicalAlerts.map((alertText, idx) => {
+                const isAllergy = alertText.toLowerCase().includes('allergy') || alertText.toLowerCase().includes('penicillin');
+                return (
+                  <span
+                    key={idx}
+                    className={`alert-tag-pill ${isAllergy ? 'allergy' : 'neutral'}`}
+                  >
+                    {alertText.toUpperCase()}
+                  </span>
+                );
+              })
+            ) : (
+              <span className="alert-tag-pill neutral">NO KNOWN DRUG ALLERGIES</span>
+            )}
+          </div>
+        </div>
+
+        {/* Live Encounter State Pill */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          marginTop: '1rem',
+          paddingTop: '0.75rem',
+          borderTop: '1px solid #f1f3ee',
+          fontSize: '0.78rem',
+          color: '#475569'
+        }}>
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '2px 8px',
+            borderRadius: 6,
+            background: '#e6f3f4',
+            color: '#005963',
+            fontWeight: 800,
+            fontSize: '0.72rem'
+          }}>
+            ■ IN OPERATORY
+          </span>
+          <span>Visit 9 Nov 2026, started 11:22</span>
+          <span>•</span>
+          <span>Practitioner: <strong>{currentUser.fullName}</strong></span>
+          <span>•</span>
+          <span>Chair: <strong>{currentUser.assignedChair || 'Chair 1 (Main Operatory)'}</strong></span>
+        </div>
+      </div>
+
+      {/* 2-Column Main Clinical Grid */}
+      <div className="chart-view-grid">
+        
+        {/* ================= LEFT COLUMN: DENTAL CHART & PROCEDURES ================= */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          <div className="card-panel">
-            <div className="panel-header">
-              <div className="panel-title">
-                <FileText size={18} color="var(--primary)" />
-                <span>Clinical Examination (SOAP)</span>
+          
+          {/* Dental Chart Container */}
+          <div className="operatory-card">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Activity size={18} color="#005963" />
+                <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+                  Dental chart
+                </h3>
+              </div>
+
+              {/* FDI / Universal System Toggle */}
+              <div style={{
+                display: 'inline-flex',
+                background: '#f1f5f9',
+                borderRadius: 8,
+                padding: '2px',
+                border: '1px solid #e2e8f0'
+              }}>
+                <button
+                  onClick={() => setNumberingSystem('FDI')}
+                  style={{
+                    padding: '3px 10px',
+                    borderRadius: 6,
+                    border: 'none',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    background: numberingSystem === 'FDI' ? '#0f172a' : 'transparent',
+                    color: numberingSystem === 'FDI' ? '#ffffff' : '#64748b'
+                  }}
+                >
+                  FDI
+                </button>
+                <button
+                  onClick={() => setNumberingSystem('Universal')}
+                  style={{
+                    padding: '3px 10px',
+                    borderRadius: 6,
+                    border: 'none',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    background: numberingSystem === 'Universal' ? '#0f172a' : 'transparent',
+                    color: numberingSystem === 'Universal' ? '#ffffff' : '#64748b'
+                  }}
+                >
+                  Universal
+                </button>
               </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Subjective, Objective, Assessment, Plan (SOAP)</label>
-              <textarea
-                className="form-textarea"
-                rows={7}
-                style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', lineHeight: '1.4' }}
-                value={soapNotes}
-                onChange={(e) => setSoapNotes(e.target.value)}
-              />
+            {/* Anatomical Odontogram Arch */}
+            <div className="odontogram-arch-container">
+              {/* Maxillary Upper Arch (18-11 | 21-28) */}
+              <div className="arch-teeth-row">
+                <div className="arch-quadrant-group">
+                  {ADULT_UPPER_RIGHT.map(num => (
+                    <AnatomicalToothSVG
+                      key={num}
+                      toothNumber={num}
+                      condition={records[num]?.condition || 'HEALTHY'}
+                      surfaces={records[num]?.surfaces || []}
+                      isSelected={selectedTooth === num}
+                      isFocused={num === 47}
+                      onClick={() => handleToothClick(num)}
+                    />
+                  ))}
+                </div>
+                <div className="arch-divider" />
+                <div className="arch-quadrant-group">
+                  {ADULT_UPPER_LEFT.map(num => (
+                    <AnatomicalToothSVG
+                      key={num}
+                      toothNumber={num}
+                      condition={records[num]?.condition || 'HEALTHY'}
+                      surfaces={records[num]?.surfaces || []}
+                      isSelected={selectedTooth === num}
+                      onClick={() => handleToothClick(num)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Mandibular Lower Arch (48-41 | 31-38) */}
+              <div className="arch-teeth-row">
+                <div className="arch-quadrant-group">
+                  {ADULT_LOWER_RIGHT.map(num => (
+                    <AnatomicalToothSVG
+                      key={num}
+                      toothNumber={num}
+                      condition={records[num]?.condition || 'HEALTHY'}
+                      surfaces={records[num]?.surfaces || []}
+                      isSelected={selectedTooth === num}
+                      isFocused={num === 47}
+                      onClick={() => handleToothClick(num)}
+                    />
+                  ))}
+                </div>
+                <div className="arch-divider" />
+                <div className="arch-quadrant-group">
+                  {ADULT_LOWER_LEFT.map(num => (
+                    <AnatomicalToothSVG
+                      key={num}
+                      toothNumber={num}
+                      condition={records[num]?.condition || 'HEALTHY'}
+                      surfaces={records[num]?.surfaces || []}
+                      isSelected={selectedTooth === num}
+                      onClick={() => handleToothClick(num)}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Treatment Plan / Procedures</label>
-              <input
-                type="text"
-                className="form-input"
-                value={treatmentPlan}
-                onChange={(e) => setTreatmentPlan(e.target.value)}
-              />
+            {/* Selected Tooth Detail Bar */}
+            <div className="selected-tooth-bar">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div className="tooth-badge-large">
+                  {formatToothDisplay(selectedTooth, numberingSystem)}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#0f172a' }}>
+                    {getToothName(selectedTooth)}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                    {currentToothRecord?.diagnosedDate || '12 Mar 2024'} • {currentToothRecord?.condition ? currentToothRecord.condition.replace('_', ' ') : 'Composite, MOD'}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                {/* Surface Buttons (M, D, O, B, L) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Surfaces</span>
+                  {(['M', 'D', 'O', 'B', 'L'] as ToothSurface[]).map(s => {
+                    const isActive = currentToothRecord?.surfaces?.includes(s);
+                    return (
+                      <button
+                        key={s}
+                        onClick={() => toggleSurface(s)}
+                        className={`surface-toggle-btn ${isActive ? 'active' : ''}`}
+                        title={`Surface ${s}`}
+                      >
+                        {s}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  className="btn-teal-primary"
+                  onClick={() => setShowAddProcedureModal(true)}
+                  style={{ padding: '0.5rem 0.95rem', fontSize: '0.8rem' }}
+                >
+                  <Plus size={14} />
+                  <span>Record procedure</span>
+                </button>
+              </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                <Pill size={14} color="var(--warning)" />
-                Prescriptions & Instructions
-              </label>
-              <input
-                type="text"
-                className="form-input"
-                value={prescriptions}
-                onChange={(e) => setPrescriptions(e.target.value)}
-              />
+            {/* Quick Condition Stamper Palette */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              flexWrap: 'wrap',
+              padding: '0.65rem 0.75rem',
+              background: '#f8fafc',
+              borderRadius: 8,
+              border: '1px solid #e2e8f0',
+              fontSize: '0.72rem'
+            }}>
+              <span style={{ fontWeight: 700, color: '#475569', marginRight: '4px' }}>Stamp:</span>
+              <button
+                onClick={() => handleApplyConditionToSelected('CARIES')}
+                style={{ padding: '3px 8px', borderRadius: 4, border: '1px solid #f87171', background: '#fee2e2', color: '#b91c1c', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Caries (Decay)
+              </button>
+              <button
+                onClick={() => handleApplyConditionToSelected('ROOT_CANAL')}
+                style={{ padding: '3px 8px', borderRadius: 4, border: '1px solid #c084fc', background: '#f3e8ff', color: '#7e22ce', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Root Canal
+              </button>
+              <button
+                onClick={() => handleApplyConditionToSelected('FILLED')}
+                style={{ padding: '3px 8px', borderRadius: 4, border: '1px solid #7dd3fc', background: '#e0f2fe', color: '#0369a1', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Composite
+              </button>
+              <button
+                onClick={() => handleApplyConditionToSelected('CROWN')}
+                style={{ padding: '3px 8px', borderRadius: 4, border: '1px solid #fcd34d', background: '#fef3c7', color: '#b45309', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Crown
+              </button>
+              <button
+                onClick={() => handleApplyConditionToSelected('EXTRACTION_NEEDED')}
+                style={{ padding: '3px 8px', borderRadius: 4, border: '1px solid #fda4af', background: '#fff1f2', color: '#be123c', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Extract
+              </button>
+              <button
+                onClick={() => handleApplyConditionToSelected('IMPLANT')}
+                style={{ padding: '3px 8px', borderRadius: 4, border: '1px solid #6ee7b7', background: '#ecfdf5', color: '#047857', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Implant
+              </button>
+              <button
+                onClick={() => handleApplyConditionToSelected('HEALTHY')}
+                style={{ padding: '3px 8px', borderRadius: 4, border: '1px solid #cbd5e1', background: '#ffffff', color: '#475569', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Sound
+              </button>
+            </div>
+          </div>
+
+          {/* Procedures This Visit Table */}
+          <div className="operatory-card">
+            <div className="procedures-header-row">
+              <h3 style={{ fontSize: '0.98rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+                Procedures, visit 9 Nov
+              </h3>
+              <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                {procedures.length} recorded
+              </span>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
-              {saveSuccess && (
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--success)', fontSize: '0.82rem' }}>
-                  <Check size={16} /> Saved to Patient Record
-                </span>
-              )}
-              <button className="btn btn-primary" onClick={handleSaveVisit}>
-                <Save size={16} />
-                <span>Save Clinical Encounter</span>
+            <table className="procedures-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 44 }}>Tooth</th>
+                  <th style={{ width: 68 }}>Surfaces</th>
+                  <th>Procedure</th>
+                  <th style={{ width: 85 }}>Code</th>
+                  <th style={{ width: 80 }}>State</th>
+                  <th style={{ width: 32 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {procedures.map(p => (
+                  <tr key={p.id}>
+                    <td style={{ fontWeight: 700, color: '#0f172a' }}>{p.toothNumber}</td>
+                    <td style={{ color: '#64748b' }}>{p.surfaces}</td>
+                    <td style={{ fontWeight: 600 }}>{p.procedureName}</td>
+                    <td style={{ fontFamily: 'monospace', color: '#64748b', fontSize: '0.75rem' }}>{p.code}</td>
+                    <td>
+                      <span className={`state-badge ${p.state.toLowerCase()}`}>
+                        {p.state}
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        onClick={() => handleDeleteProcedure(p.id)}
+                        style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 2 }}
+                        title="Remove procedure"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* ================= RIGHT COLUMN: ENCOUNTER SOAP & TREATMENT PLAN ================= */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          
+          {/* Encounter (SOAP) Card */}
+          <div className="operatory-card">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.85rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FileText size={18} color="#005963" />
+                <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+                  Encounter
+                </h3>
+              </div>
+              <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                {encounterTitle}
+              </span>
+            </div>
+
+            <div className="soap-box">
+              {/* Chief Complaint */}
+              <div>
+                <label className="soap-field-title">Chief complaint</label>
+                <textarea
+                  className="soap-text-input"
+                  rows={2}
+                  value={chiefComplaint}
+                  onChange={(e) => { setChiefComplaint(e.target.value); setHasUnsavedChanges(true); }}
+                />
+              </div>
+
+              {/* Examination Findings (Objective) */}
+              <div>
+                <label className="soap-field-title">Examination findings</label>
+                <textarea
+                  className="soap-text-input"
+                  rows={3}
+                  value={examinationFindings}
+                  onChange={(e) => { setExaminationFindings(e.target.value); setHasUnsavedChanges(true); }}
+                />
+              </div>
+
+              {/* Diagnosis (Assessment) */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <label className="soap-field-title" style={{ margin: 0 }}>Diagnosis</label>
+                  <span style={{ fontSize: '0.7rem', background: '#f1f5f9', color: '#475569', padding: '1px 6px', borderRadius: 4, fontFamily: 'monospace' }}>
+                    {diagnosisCode}
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  className="soap-text-input"
+                  value={diagnosis}
+                  onChange={(e) => { setDiagnosis(e.target.value); setHasUnsavedChanges(true); }}
+                />
+              </div>
+
+              {/* Treatment Notes (Plan) */}
+              <div>
+                <label className="soap-field-title">Treatment notes</label>
+                <textarea
+                  className="soap-text-input"
+                  rows={4}
+                  value={treatmentNotes}
+                  onChange={(e) => { setTreatmentNotes(e.target.value); setHasUnsavedChanges(true); }}
+                />
+              </div>
+
+              {/* Prescription preview */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0.65rem 0.85rem',
+                background: '#fafbfa',
+                border: '1px solid #e2e8f0',
+                borderRadius: 8
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem' }}>
+                  <Pill size={15} color="#005963" />
+                  <span style={{ fontWeight: 600 }}>Rx Prescription:</span>
+                  <span style={{ color: '#475569' }}>{prescriptionText}</span>
+                </div>
+                <button
+                  onClick={() => setShowRxPrintModal(true)}
+                  style={{
+                    padding: '3px 9px',
+                    borderRadius: 6,
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Review
+                </button>
+              </div>
+
+              {/* Save Draft / Review Visit Actions */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginTop: '0.5rem',
+                paddingTop: '0.75rem',
+                borderTop: '1px solid #f1f3ee'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem' }}>
+                  {hasUnsavedChanges ? (
+                    <span style={{ color: '#d97706', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#f59e0b' }} />
+                      Unsaved changes
+                    </span>
+                  ) : saveSuccess ? (
+                    <span style={{ color: '#059669', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Check size={14} /> Encounter saved to DB
+                    </span>
+                  ) : (
+                    <span style={{ color: '#94a3b8' }}>All changes saved</span>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    className="btn-outline-pill"
+                    onClick={() => { setHasUnsavedChanges(false); setSaveSuccess(true); setTimeout(() => setSaveSuccess(false), 2000); }}
+                    style={{ padding: '0.45rem 0.95rem', fontSize: '0.78rem' }}
+                  >
+                    Save draft
+                  </button>
+                  <button
+                    className="btn-teal-primary"
+                    onClick={handleSaveEncounter}
+                    style={{ padding: '0.45rem 1.15rem', fontSize: '0.78rem' }}
+                  >
+                    <Save size={14} /> Review visit
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Treatment Plan Card */}
+          <div className="operatory-card">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+              <h3 style={{ fontSize: '0.98rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+                Treatment plan
+              </h3>
+              <button
+                onClick={() => window.print()}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#64748b',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                <Printer size={13} /> Print plan
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {treatmentPlanItems.map(item => (
+                <div key={item.id} className="plan-item-row">
+                  <span style={{ color: '#94a3b8', fontWeight: 700 }}>{item.priority}</span>
+                  <span style={{ fontWeight: 600, color: '#0f172a' }}>{item.procedureName}</span>
+                  <span style={{ color: '#64748b', textAlign: 'center' }}>{item.toothNumber}</span>
+                  <span style={{ color: '#64748b', fontSize: '0.75rem' }}>{item.sessions}</span>
+                  <span style={{ fontWeight: 700, color: '#0f172a', textAlign: 'right' }}>
+                    ${item.cost.toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Treatment Plan Footer */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginTop: '0.85rem',
+              paddingTop: '0.75rem',
+              borderTop: '1px solid #f1f3ee',
+              fontSize: '0.82rem'
+            }}>
+              <span style={{ color: '#64748b', fontSize: '0.75rem' }}>
+                Phase 1 of treatment plan • <span style={{ color: '#005963', cursor: 'pointer', fontWeight: 600 }}>+ Add note</span>
+              </span>
+              <span style={{ fontWeight: 800, color: '#0f172a' }}>
+                Estimated total: ${totalEstimatedCost.toFixed(2)}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ================= MODALS ================= */}
+
+      {/* 1. Patient Details Modal */}
+      {showPatientDetailsModal && (
+        <div className="modal-overlay" onClick={() => setShowPatientDetailsModal(false)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 540 }}>
+            <div className="modal-header">
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+                Patient Demographic File
+              </h3>
+              <button
+                onClick={() => setShowPatientDetailsModal(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', fontSize: '0.85rem' }}>
+              <div>
+                <span style={{ color: '#64748b', fontSize: '0.75rem', display: 'block' }}>Full Name</span>
+                <strong>{currentPatient.firstName} {currentPatient.lastName}</strong>
+              </div>
+              <div>
+                <span style={{ color: '#64748b', fontSize: '0.75rem', display: 'block' }}>Patient ID</span>
+                <strong>{currentPatient.patientCode}</strong>
+              </div>
+              <div>
+                <span style={{ color: '#64748b', fontSize: '0.75rem', display: 'block' }}>Date of Birth</span>
+                <span>{currentPatient.dob} ({age} years)</span>
+              </div>
+              <div>
+                <span style={{ color: '#64748b', fontSize: '0.75rem', display: 'block' }}>Gender</span>
+                <span>{currentPatient.gender}</span>
+              </div>
+              <div>
+                <span style={{ color: '#64748b', fontSize: '0.75rem', display: 'block' }}>Phone</span>
+                <span>{currentPatient.phone}</span>
+              </div>
+              <div>
+                <span style={{ color: '#64748b', fontSize: '0.75rem', display: 'block' }}>Email</span>
+                <span>{currentPatient.email || 'None on file'}</span>
+              </div>
+              <div style={{ gridColumn: 'span 2' }}>
+                <span style={{ color: '#64748b', fontSize: '0.75rem', display: 'block' }}>Address</span>
+                <span>{currentPatient.address || 'Local Resident'}</span>
+              </div>
+              <div>
+                <span style={{ color: '#64748b', fontSize: '0.75rem', display: 'block' }}>Emergency Contact</span>
+                <span>{currentPatient.emergencyContactName || 'None'}</span>
+              </div>
+              <div>
+                <span style={{ color: '#64748b', fontSize: '0.75rem', display: 'block' }}>Emergency Phone</span>
+                <span>{currentPatient.emergencyContactPhone || 'None'}</span>
+              </div>
+              <div>
+                <span style={{ color: '#64748b', fontSize: '0.75rem', display: 'block' }}>Insurance Carrier</span>
+                <span>{currentPatient.insuranceCarrier || 'Self-Pay (Uninsured)'}</span>
+              </div>
+              <div>
+                <span style={{ color: '#64748b', fontSize: '0.75rem', display: 'block' }}>Policy Number</span>
+                <span>{currentPatient.insurancePolicyNumber || '—'}</span>
+              </div>
+            </div>
+
+            <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn-teal-primary" onClick={() => setShowPatientDetailsModal(false)}>
+                Close
               </button>
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  );
-};
+      )}
 
-// Sub-component: Individual Tooth Item
-const ToothItem: React.FC<{
-  number: number;
-  record?: ToothRecord;
-  isSelected: boolean;
-  onClick: () => void;
-}> = ({ number, record, isSelected, onClick }) => {
-  const condition = record?.condition || 'HEALTHY';
-  const colorMeta = CONDITION_COLORS[condition];
+      {/* 2. Record Procedure Modal */}
+      {showAddProcedureModal && (
+        <div className="modal-overlay" onClick={() => setShowAddProcedureModal(false)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+                Record Clinical Procedure
+              </h3>
+              <button
+                onClick={() => setShowAddProcedureModal(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
 
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        padding: '6px 2px',
-        borderRadius: 'var(--radius-sm)',
-        background: isSelected ? 'rgba(14, 165, 233, 0.2)' : 'var(--bg-input)',
-        border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border-subtle)',
-        cursor: 'pointer',
-        transition: 'all 0.15s ease',
-        userSelect: 'none'
-      }}
-    >
-      <span style={{ fontSize: '0.68rem', fontWeight: 700, color: isSelected ? 'var(--primary)' : 'var(--text-muted)' }}>
-        {number}
-      </span>
+            <form onSubmit={handleAddProcedure} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: 4 }}>
+                    Tooth Number
+                  </label>
+                  <input
+                    type="number"
+                    value={newProcForm.toothNumber}
+                    onChange={e => setNewProcForm({ ...newProcForm, toothNumber: Number(e.target.value) })}
+                    style={{ width: '100%', padding: '0.55rem', borderRadius: 8, border: '1px solid #cbd5e1' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: 4 }}>
+                    Surfaces
+                  </label>
+                  <input
+                    type="text"
+                    value={newProcForm.surfaces}
+                    onChange={e => setNewProcForm({ ...newProcForm, surfaces: e.target.value })}
+                    style={{ width: '100%', padding: '0.55rem', borderRadius: 8, border: '1px solid #cbd5e1' }}
+                  />
+                </div>
+              </div>
 
-      {/* Anatomical Mini Tooth Box */}
-      <div
-        style={{
-          width: '28px',
-          height: '34px',
-          marginTop: '4px',
-          borderRadius: '4px',
-          background: colorMeta.bg,
-          border: `1.5px solid ${colorMeta.border}`,
-          position: 'relative',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: condition !== 'HEALTHY' ? `0 0 8px ${colorMeta.border}50` : 'none'
-        }}
-      >
-        {condition === 'MISSING' && (
-          <div style={{ position: 'absolute', width: '100%', height: '1.5px', background: '#e11d48', transform: 'rotate(45deg)' }} />
-        )}
-        {condition === 'EXTRACTION_NEEDED' && (
-          <span style={{ color: '#e11d48', fontWeight: 900, fontSize: '0.85rem' }}>✕</span>
-        )}
-        {condition === 'ROOT_CANAL' && (
-          <div style={{ width: '4px', height: '18px', background: '#8b5cf6', borderRadius: '2px' }} />
-        )}
-        {condition === 'IMPLANT' && (
-          <div style={{ width: '8px', height: '14px', border: '1.5px solid #10b981', borderRadius: '2px' }} />
-        )}
-        {record?.surfaces && record.surfaces.length > 0 && condition !== 'MISSING' && (
-          <span style={{ fontSize: '0.55rem', fontWeight: 800, color: '#fff' }}>
-            {record.surfaces.join('')}
-          </span>
-        )}
-      </div>
+              <div>
+                <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: 4 }}>
+                  Procedure Description
+                </label>
+                <select
+                  value={newProcForm.procedureName}
+                  onChange={e => {
+                    const val = e.target.value;
+                    let code = 'D2391';
+                    if (val.includes('Root canal') || val.includes('Access')) code = 'ENDO-ACC';
+                    if (val.includes('Rubber dam')) code = 'ENDO-ISO';
+                    if (val.includes('Canal shaping')) code = 'ENDO-SHP';
+                    if (val.includes('Irrigation')) code = 'ENDO-IRR';
+                    if (val.includes('Provisional')) code = 'REST-PRV';
+                    if (val.includes('Crown')) code = 'D2740';
+                    setNewProcForm({ ...newProcForm, procedureName: val, code });
+                  }}
+                  style={{ width: '100%', padding: '0.55rem', borderRadius: 8, border: '1px solid #cbd5e1' }}
+                >
+                  <option value="Access opening and pulp extirpation">Access opening and pulp extirpation (ENDO-ACC)</option>
+                  <option value="Canal shaping to F2">Canal shaping to F2 (ENDO-SHP)</option>
+                  <option value="Rubber dam isolation">Rubber dam isolation (ENDO-ISO)</option>
+                  <option value="Working length determination">Working length determination (ENDO-WL)</option>
+                  <option value="Irrigation, 3% NaOCl">Irrigation, 3% NaOCl (ENDO-IRR)</option>
+                  <option value="Provisional restoration">Provisional restoration (REST-PRV)</option>
+                  <option value="Composite restoration (1 surface)">Composite restoration (1 surface) (D2391)</option>
+                  <option value="Full ceramic crown prep">Full ceramic crown prep (D2740)</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: 4 }}>
+                    Procedure Code
+                  </label>
+                  <input
+                    type="text"
+                    value={newProcForm.code}
+                    onChange={e => setNewProcForm({ ...newProcForm, code: e.target.value })}
+                    style={{ width: '100%', padding: '0.55rem', borderRadius: 8, border: '1px solid #cbd5e1' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: 4 }}>
+                    Encounter State
+                  </label>
+                  <select
+                    value={newProcForm.state}
+                    onChange={e => setNewProcForm({ ...newProcForm, state: e.target.value as any })}
+                    style={{ width: '100%', padding: '0.55rem', borderRadius: 8, border: '1px solid #cbd5e1' }}
+                  >
+                    <option value="Draft">Draft</option>
+                    <option value="Recorded">Recorded</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
+                <button
+                  type="button"
+                  className="btn-outline-pill"
+                  onClick={() => setShowAddProcedureModal(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-teal-primary">
+                  Add Procedure
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Official Printable Prescription Modal */}
+      {showRxPrintModal && (
+        <div className="modal-overlay" onClick={() => setShowRxPrintModal(false)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
+            <div style={{ textAlign: 'center', borderBottom: '2px solid #005963', paddingBottom: '0.85rem', marginBottom: '1.25rem' }}>
+              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#005963', margin: 0 }}>
+                DentalDesk Practice Clinic
+              </h2>
+              <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 2 }}>
+                Operatory Bay 1 • Air-Gapped Clinical Diagnostic Network
+              </div>
+              <div style={{ fontSize: '0.78rem', color: '#0f172a', fontWeight: 700, marginTop: 4 }}>
+                Prescriber: {currentUser.fullName} • Board Reg: #{currentUser.licenseNumber || 'DDS-2019-8842'}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '1.25rem' }}>
+              <div>
+                <strong>Patient:</strong> {currentPatient.firstName} {currentPatient.lastName} ({currentPatient.patientCode})
+              </div>
+              <div>
+                <strong>Date:</strong> {new Date().toLocaleDateString()}
+              </div>
+            </div>
+
+            {/* Red Alert warning if penicillin allergic */}
+            {currentPatient.medicalAlerts.some(a => a.toLowerCase().includes('penicillin')) && (
+              <div style={{
+                background: '#fef2f2',
+                border: '1px solid #f87171',
+                padding: '6px 10px',
+                borderRadius: 6,
+                fontSize: '0.75rem',
+                color: '#b91c1c',
+                fontWeight: 700,
+                marginBottom: '1rem'
+              }}>
+                ⚠ PATIENT HAS DOCUMENTED PENICILLIN ANAPHYLAXIS ALERT — PRESCRIBED LINCOSAMIDE (CLINDAMYCIN)
+              </div>
+            )}
+
+            <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: 8, border: '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
+              <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#005963', marginBottom: '0.4rem' }}>
+                ℞ {prescriptionText}
+              </div>
+              <div style={{ fontSize: '0.82rem', marginBottom: '0.25rem' }}>
+                <strong>Sig:</strong> 1 capsule orally every 8 hours (TID) with full glass of water
+              </div>
+              <div style={{ fontSize: '0.82rem', marginBottom: '0.25rem' }}>
+                <strong>Duration:</strong> 7 days (complete full course)
+              </div>
+              <div style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                <strong>Warnings:</strong> Do not skip doses. Report persistent diarrhea immediately.
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '1.5rem' }}>
+              <div style={{ borderTop: '1px solid #94a3b8', width: 170, textAlign: 'center', paddingTop: 4, fontSize: '0.75rem' }}>
+                Doctor Signature
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button className="btn-outline-pill" onClick={() => setShowRxPrintModal(false)}>Close</button>
+                <button className="btn-teal-primary" onClick={() => window.print()}>Print Prescription</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

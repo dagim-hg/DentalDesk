@@ -64,7 +64,7 @@ export const ModernSidebar: React.FC<ModernSidebarProps> = ({ baseRoute }) => {
           <LayoutDashboard size={18} />
           <span>
             {role === 'ROLE_OWNER' && 'Executive Dashboard'}
-            {role === 'ROLE_DENTIST' && 'Clinical Workspace'}
+            {role === 'ROLE_DENTIST' && 'Operatory'}
             {role === 'ROLE_RECEPTIONIST' && 'Front Desk Queue'}
             {role === 'ROLE_ASSISTANT' && 'Assistant Station'}
           </span>
@@ -100,24 +100,24 @@ export const ModernSidebar: React.FC<ModernSidebarProps> = ({ baseRoute }) => {
         {/* ── DENTIST NAVIGATION ── */}
         {role === 'ROLE_DENTIST' && (
           <>
-            <div className="nav-section-title">CLINIC WORKSPACE</div>
+            <div className="nav-section-title">CLINICAL WORKSPACE</div>
             <button className={`nav-pill-btn ${isActive('queue') ? 'active' : ''}`} onClick={() => go('queue')}>
-              <Clock size={18} /><span>Patient Queue</span>
+              <Clock size={18} /><span>Waiting queue</span>
               {waitingCount > 0 && <span className="nav-counter-pill">{waitingCount}</span>}
             </button>
             <button className={`nav-pill-btn ${isActive('chart') ? 'active' : ''}`} onClick={() => go('chart')}>
               <Activity size={18} /><span>Odontogram & Chart</span>
             </button>
             <button className={`nav-pill-btn ${isActive('patients') ? 'active' : ''}`} onClick={() => go('patients')}>
-              <Users size={18} /><span>Patient Records</span>
+              <Users size={18} /><span>Patients</span>
             </button>
             <button className={`nav-pill-btn ${isActive('appointments') ? 'active' : ''}`} onClick={() => go('appointments')}>
-              <Calendar size={18} /><span>My Schedule</span>
+              <Calendar size={18} /><span>Appointments</span>
             </button>
 
             <div className="nav-section-title">CLINICAL SUPPLIES</div>
             <button className={`nav-pill-btn ${isActive('inventory') ? 'active' : ''}`} onClick={() => go('inventory')}>
-              <Package size={18} /><span>Material Usage</span>
+              <Package size={18} /><span>Inventory</span>
             </button>
           </>
         )}
