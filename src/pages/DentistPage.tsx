@@ -41,7 +41,7 @@ export const DentistPage: React.FC = () => {
           } />
           <Route path="chart" element={<ToothChart onBack={() => navigate('/dentist')} />} />
           <Route path="patients" element={<PatientRegistry onOpenChart={handleNavigateToChart} />} />
-          <Route path="appointments" element={<AppointmentCalendar />} />
+          <Route path="appointments" element={<AppointmentCalendar onOpenChart={handleNavigateToChart} />} />
           <Route path="inventory" element={<InventoryTracker />} />
           <Route path="*" element={<Navigate to="/dentist" replace />} />
         </Routes>

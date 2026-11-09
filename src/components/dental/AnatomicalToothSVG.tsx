@@ -345,3 +345,4 @@ export const AnatomicalToothSVG: React.FC<AnatomicalToothSVGProps> = ({
     </div>
   );
 };
+

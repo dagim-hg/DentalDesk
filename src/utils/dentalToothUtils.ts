@@ -59,3 +59,4 @@ export function formatToothDisplay(fdiNumber: number, system: 'FDI' | 'Universal
   }
   return fdiNumber;
 }
+

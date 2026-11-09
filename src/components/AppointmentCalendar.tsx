@@ -1,33 +1,45 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDental } from '../context/DentalContext';
+import { Appointment, AppointmentStatus, Patient } from '../types/dental';
 import { 
   Calendar as CalendarIcon, Clock, Plus, User, 
-  MapPin, CheckCircle, AlertCircle, X, ChevronLeft, ChevronRight 
+  MapPin, CheckCircle2, AlertCircle, X, ChevronLeft, 
+  ChevronRight, Activity, Armchair, Stethoscope 
 } from 'lucide-react';
-import { Appointment, AppointmentStatus } from '../types/dental';
 
-export const AppointmentCalendar: React.FC = () => {
-  const { appointments, bookAppointment, patients, users, updateAppointmentStatus } = useDental();
+interface AppointmentCalendarProps {
+  onOpenChart?: (patient: Patient) => void;
+}
+
+export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({ onOpenChart }) => {
+  const { 
+    appointments, bookAppointment, patients, users, 
+    updateAppointmentStatus, setSelectedPatient, currentUser 
+  } = useDental();
+  
+  const navigate = useNavigate();
   const [selectedChair, setSelectedChair] = useState<string>('ALL');
+  const [selectedDate, setSelectedDate] = useState<string>('2026-11-09');
   const [showBookingModal, setShowBookingModal] = useState<boolean>(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
 
   // New appointment form state
   const [form, setForm] = useState({
     patientId: patients[0]?.id || 1,
-    dentistId: 1,
-    date: '2026-10-23',
-    time: '11:00',
-    durationMinutes: 30,
-    operatoryChair: 'Chair 1 (Operatory A)',
+    dentistId: currentUser.id || 1,
+    date: '2026-11-09',
+    time: '11:15',
+    durationMinutes: 45,
+    operatoryChair: 'Chair 1 (Main Operatory)',
     chiefComplaint: '',
     isUrgent: false
   });
 
   const chairs = [
-    'Chair 1 (Operatory A)',
+    'Chair 1 (Main Operatory)',
     'Chair 2 (Hygiene Suite)',
-    'Chair 3 (Surgical/Prosthetic)'
+    'Chair 3 (Surgical Operatory)'
   ];
 
   const filteredAppointments = appointments.filter(app => {
@@ -35,14 +47,13 @@ export const AppointmentCalendar: React.FC = () => {
     return true;
   });
 
-  const getPatientName = (patientId: number) => {
-    const p = patients.find(pt => pt.id === patientId);
-    return p ? `${p.firstName} ${p.lastName}` : `Patient #${patientId}`;
+  const getPatient = (patientId: number) => {
+    return patients.find(pt => pt.id === patientId);
   };
 
   const getDentistName = (dentistId: number) => {
     const u = users.find(usr => usr.id === dentistId);
-    return u ? u.fullName : `Dentist #${dentistId}`;
+    return u ? u.fullName : `Dr. Sarah Chen, DDS`;
   };
 
   const handleBook = (e: React.FormEvent) => {
@@ -66,11 +77,11 @@ export const AppointmentCalendar: React.FC = () => {
       setShowBookingModal(false);
       setForm({
         patientId: patients[0]?.id || 1,
-        dentistId: 1,
-        date: '2026-10-23',
-        time: '11:00',
-        durationMinutes: 30,
-        operatoryChair: 'Chair 1 (Operatory A)',
+        dentistId: currentUser.id || 1,
+        date: '2026-11-09',
+        time: '11:15',
+        durationMinutes: 45,
+        operatoryChair: 'Chair 1 (Main Operatory)',
         chiefComplaint: '',
         isUrgent: false
       });
@@ -79,264 +90,369 @@ export const AppointmentCalendar: React.FC = () => {
     }
   };
 
+  const handleOpenChartForPatient = (patient: Patient) => {
+    setSelectedPatient(patient);
+    if (onOpenChart) {
+      onOpenChart(patient);
+    } else {
+      navigate('/dentist/chart');
+    }
+  };
+
+  const formatTimeSlot = (isoString: string, duration: number) => {
+    try {
+      const d = new Date(isoString);
+      const start = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+      const endD = new Date(d.getTime() + duration * 60000);
+      const end = endD.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+      return `${start} - ${end}`;
+    } catch {
+      return '11:15 - 12:00';
+    }
+  };
+
+  const getStatusBadgeStyle = (status: AppointmentStatus) => {
+    switch (status) {
+      case 'IN_OPERATORY':
+        return { bg: '#e6f3f4', color: '#005963', label: 'In Operatory', border: '#005963' };
+      case 'COMPLETED':
+        return { bg: '#ecfdf5', color: '#059669', label: 'Completed', border: '#a7f3d0' };
+      case 'ARRIVED':
+        return { bg: '#fef3c7', color: '#b45309', label: 'In Waiting Room', border: '#fde68a' };
+      case 'NO_SHOW':
+        return { bg: '#fef2f2', color: '#b91c1c', label: 'No-Show', border: '#fecaca' };
+      default:
+        return { bg: '#f1f5f9', color: '#475569', label: 'Confirmed', border: '#e2e8f0' };
+    }
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {/* Calendar Controls Bar */}
-      <div className="card-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <CalendarIcon size={20} color="var(--primary)" />
-            <h3 style={{ fontSize: '1.15rem' }}>Operatory Schedule</h3>
-          </div>
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-            Friday, October 23, 2026 (Clinic Operating Hours 09:00 - 18:00)
-          </div>
+    <div style={{ maxWidth: 1380, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+      
+      {/* Top Header & Schedule Controls */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+            Operatory Chair Schedule
+          </h1>
+          <p style={{ fontSize: '0.82rem', color: '#64748b', margin: '4px 0 0' }}>
+            Monday, 9 November 2026 • Clinic Operating Hours 08:30 - 17:30
+          </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          {/* Operatory Chair Filter */}
-          <select 
-            className="form-select" 
-            style={{ width: 'auto', padding: '0.4rem 0.8rem', fontSize: '0.82rem' }}
-            value={selectedChair}
-            onChange={e => setSelectedChair(e.target.value)}
+        <button
+          className="btn-teal-primary"
+          onClick={() => setShowBookingModal(true)}
+          style={{ padding: '0.65rem 1.25rem' }}
+        >
+          <Plus size={16} />
+          <span>Book Chair Appointment</span>
+        </button>
+      </div>
+
+      {/* Operatory Chair Filter Pills */}
+      <div className="operatory-card" style={{ padding: '0.85rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#64748b', marginRight: 4 }}>
+            Operatory Chair:
+          </span>
+
+          <button
+            onClick={() => setSelectedChair('ALL')}
+            style={{
+              padding: '0.4rem 0.95rem',
+              borderRadius: 8,
+              border: 'none',
+              background: selectedChair === 'ALL' ? '#005963' : '#f1f5f9',
+              color: selectedChair === 'ALL' ? '#ffffff' : '#475569',
+              fontWeight: 700,
+              fontSize: '0.8rem',
+              cursor: 'pointer'
+            }}
           >
-            <option value="ALL">All Operatory Chairs</option>
-            {chairs.map(c => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-
-          <button className="btn btn-primary btn-sm" onClick={() => setShowBookingModal(true)}>
-            <Plus size={15} />
-            <span>Book Appointment</span>
+            All Operatories ({appointments.length})
           </button>
+
+          {chairs.map(c => {
+            const count = appointments.filter(a => a.operatoryChair === c).length;
+            const isSel = selectedChair === c;
+            return (
+              <button
+                key={c}
+                onClick={() => setSelectedChair(c)}
+                style={{
+                  padding: '0.4rem 0.95rem',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: isSel ? '#005963' : '#f1f5f9',
+                  color: isSel ? '#ffffff' : '#475569',
+                  fontWeight: 700,
+                  fontSize: '0.8rem',
+                  cursor: 'pointer'
+                }}
+              >
+                {c.split(' (')[0]} ({count})
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', color: '#64748b' }}>
+          <CalendarIcon size={15} color="#005963" />
+          <strong>9 Nov 2026</strong>
         </div>
       </div>
 
-      {/* Operatory Chairs Timeline Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.25rem' }}>
-        {chairs.filter(c => selectedChair === 'ALL' || selectedChair === c).map((chair) => {
-          const chairAppointments = filteredAppointments.filter(a => a.operatoryChair === chair);
-          return (
-            <div key={chair} className="card-panel">
-              <div className="panel-header" style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: '0.75rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <MapPin size={16} color="var(--primary)" />
-                  <strong style={{ color: '#fff', fontSize: '0.95rem' }}>{chair}</strong>
-                </div>
-                <span className="badge-counter" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
-                  {chairAppointments.length} Booked
-                </span>
-              </div>
+      {/* Timeline Schedule Cards List */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+        {filteredAppointments.length === 0 ? (
+          <div className="operatory-card" style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8' }}>
+            No appointments booked for this operatory filter.
+          </div>
+        ) : (
+          filteredAppointments.map(appt => {
+            const pt = getPatient(appt.patientId);
+            const statusMeta = getStatusBadgeStyle(appt.status);
+            const isInOperatory = appt.status === 'IN_OPERATORY';
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem' }}>
-                {chairAppointments.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-                    Chair available throughout the day.
-                  </div>
-                ) : (
-                  chairAppointments.map((app) => {
-                    const timeStr = new Date(app.scheduledStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    return (
-                      <div 
-                        key={app.id}
-                        style={{
-                          background: app.status === 'IN_OPERATORY' ? 'rgba(245, 158, 11, 0.1)' : 'var(--bg-surface)',
-                          border: app.status === 'IN_OPERATORY' ? '1px solid var(--warning)' : '1px solid var(--border-subtle)',
-                          borderRadius: 'var(--radius-md)',
-                          padding: '0.85rem',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '0.45rem'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--primary)', fontWeight: 700 }}>
-                            {timeStr} ({app.durationMinutes} min)
-                          </span>
-                          <span 
-                            style={{ 
-                              fontSize: '0.7rem', 
-                              fontWeight: 700, 
-                              padding: '0.15rem 0.5rem', 
-                              borderRadius: 'var(--radius-full)',
-                              background: app.status === 'IN_OPERATORY' ? 'var(--warning)' : 'var(--bg-card)',
-                              color: app.status === 'IN_OPERATORY' ? '#000' : 'var(--text-secondary)'
-                            }}
-                          >
-                            {app.status}
-                          </span>
-                        </div>
-
-                        <div style={{ fontWeight: 700, color: '#fff', fontSize: '0.92rem' }}>
-                          {getPatientName(app.patientId)}
-                        </div>
-
-                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                          <div>Dentist: {getDentistName(app.dentistId)}</div>
-                          <div>Procedure: {app.chiefComplaint}</div>
-                        </div>
-
-                        {/* Quick Status Toggles */}
-                        <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.35rem' }}>
-                          {app.status === 'SCHEDULED' && (
-                            <button 
-                              className="btn btn-secondary btn-sm"
-                              style={{ flex: 1 }}
-                              onClick={() => updateAppointmentStatus(app.id, 'ARRIVED')}
-                            >
-                              Check-In Patient
-                            </button>
-                          )}
-                          {app.status === 'ARRIVED' && (
-                            <button 
-                              className="btn btn-primary btn-sm"
-                              style={{ flex: 1 }}
-                              onClick={() => updateAppointmentStatus(app.id, 'IN_OPERATORY')}
-                            >
-                              Seat Patient
-                            </button>
-                          )}
-                          {app.status === 'IN_OPERATORY' && (
-                            <button 
-                              className="btn btn-success btn-sm"
-                              style={{ flex: 1 }}
-                              onClick={() => updateAppointmentStatus(app.id, 'COMPLETED')}
-                            >
-                              Mark Finished
-                            </button>
-                          )}
-                        </div>
+            return (
+              <div
+                key={appt.id}
+                className="operatory-card"
+                style={{
+                  padding: '1.15rem 1.35rem',
+                  borderLeft: isInOperatory ? '5px solid #005963' : '1px solid #e3e6dd',
+                  background: isInOperatory ? '#f8fdfd' : '#ffffff',
+                  boxShadow: isInOperatory ? '0 2px 8px rgba(0,89,99,0.06)' : '0 1px 3px rgba(0,0,0,0.02)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+                  
+                  {/* Left: Time & Patient Identity */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1.25rem' }}>
+                    <div style={{
+                      minWidth: 100,
+                      padding: '0.4rem 0.75rem',
+                      background: '#f8fafc',
+                      borderRadius: 8,
+                      border: '1px solid #e2e8f0',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#0f172a' }}>
+                        {formatTimeSlot(appt.scheduledStart, appt.durationMinutes)}
                       </div>
-                    );
-                  })
-                )}
+                      <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 1 }}>
+                        {appt.durationMinutes} minutes
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+                          {pt ? `${pt.firstName} ${pt.lastName}` : 'Walk-in Patient'}
+                        </h3>
+                        {pt && (
+                          <span style={{ fontSize: '0.72rem', background: '#f1f5f9', color: '#475569', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
+                            {pt.patientCode}
+                          </span>
+                        )}
+                        {appt.isUrgent && (
+                          <span className="alert-tag-pill urgent" style={{ fontSize: '0.65rem' }}>
+                            URGENT
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 3 }}>
+                        Operatory: <strong>{appt.operatoryChair}</strong> • Doctor: {getDentistName(appt.dentistId)}
+                      </div>
+
+                      {/* Medical alert badges if patient has any */}
+                      {pt?.medicalAlerts && pt.medicalAlerts.length > 0 && (
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
+                          {pt.medicalAlerts.map((alt, i) => (
+                            <span key={i} className="alert-tag-pill allergy" style={{ fontSize: '0.65rem', padding: '1px 5px' }}>
+                              ⚠ {alt}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <div style={{ fontSize: '0.82rem', color: '#1e293b', marginTop: 6, fontWeight: 500 }}>
+                        {appt.chiefComplaint || 'Routine diagnostic and preventive consultation.'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right: Status Pill & Fast Action */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    <span
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: 9999,
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        background: statusMeta.bg,
+                        color: statusMeta.color,
+                        border: `1px solid ${statusMeta.border}`
+                      }}
+                    >
+                      {statusMeta.label}
+                    </span>
+
+                    {pt && (
+                      <button
+                        className="btn-teal-primary"
+                        onClick={() => handleOpenChartForPatient(pt)}
+                        style={{ padding: '0.45rem 0.95rem', fontSize: '0.78rem' }}
+                      >
+                        <Activity size={14} />
+                        <span>Open Chart</span>
+                      </button>
+                    )}
+
+                    {appt.status === 'ARRIVED' && pt && (
+                      <button
+                        className="btn-outline-pill"
+                        onClick={() => {
+                          updateAppointmentStatus(appt.id, 'IN_OPERATORY');
+                          setSelectedPatient(pt);
+                        }}
+                        style={{ padding: '0.45rem 0.85rem', fontSize: '0.78rem' }}
+                      >
+                        Seat in Chair
+                      </button>
+                    )}
+
+                    {appt.status === 'IN_OPERATORY' && (
+                      <button
+                        className="btn-outline-pill"
+                        onClick={() => updateAppointmentStatus(appt.id, 'COMPLETED')}
+                        style={{ padding: '0.45rem 0.85rem', fontSize: '0.78rem', color: '#059669', borderColor: '#a7f3d0' }}
+                      >
+                        <CheckCircle2 size={14} /> Finish
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
 
-      {/* Booking Dialog Modal */}
+      {/* Book Appointment Modal */}
       {showBookingModal && (
-        <div className="modal-overlay">
-          <div className="modal-dialog">
+        <div className="modal-overlay" onClick={() => setShowBookingModal(false)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
             <div className="modal-header">
-              <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Plus size={18} color="var(--primary)" />
-                Schedule Clinical Appointment
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+                Book Chair Appointment
               </h3>
-              <button className="btn btn-secondary btn-sm" onClick={() => setShowBookingModal(false)}>
-                <X size={16} />
+              <button
+                onClick={() => setShowBookingModal(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleBook}>
-              <div className="modal-body">
-                {bookingError && (
-                  <div className="medical-alert-box" style={{ background: 'var(--danger-bg)', borderColor: 'var(--danger)' }}>
-                    <AlertCircle size={18} color="#f43f5e" />
-                    <span>{bookingError}</span>
-                  </div>
-                )}
+            <form onSubmit={handleBook} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: 4 }}>
+                  Select Patient *
+                </label>
+                <select
+                  value={form.patientId}
+                  onChange={e => setForm({ ...form, patientId: Number(e.target.value) })}
+                  style={{ width: '100%', padding: '0.55rem', borderRadius: 8, border: '1px solid #cbd5e1' }}
+                >
+                  {patients.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.firstName} {p.lastName} ({p.patientCode})
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                <div className="form-group">
-                  <label className="form-label">Select Patient</label>
-                  <select 
-                    className="form-select"
-                    value={form.patientId}
-                    onChange={e => setForm({ ...form, patientId: Number(e.target.value) })}
-                  >
-                    {patients.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.firstName} {p.lastName} ({p.patientCode}) - {p.phone}
-                      </option>
-                    ))}
-                  </select>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: 4 }}>Date</label>
+                  <input
+                    type="date"
+                    value={form.date}
+                    onChange={e => setForm({ ...form, date: e.target.value })}
+                    style={{ width: '100%', padding: '0.55rem', borderRadius: 8, border: '1px solid #cbd5e1' }}
+                  />
                 </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  <div className="form-group">
-                    <label className="form-label">Dentist</label>
-                    <select 
-                      className="form-select"
-                      value={form.dentistId}
-                      onChange={e => setForm({ ...form, dentistId: Number(e.target.value) })}
-                    >
-                      {users.filter(u => u.role === 'ROLE_DENTIST' || u.role === 'ROLE_OWNER').map(u => (
-                        <option key={u.id} value={u.id}>{u.fullName}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Operatory Chair</label>
-                    <select 
-                      className="form-select"
-                      value={form.operatoryChair}
-                      onChange={e => setForm({ ...form, operatoryChair: e.target.value })}
-                    >
-                      {chairs.map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '1rem' }}>
-                  <div className="form-group">
-                    <label className="form-label">Date</label>
-                    <input 
-                      type="date" 
-                      className="form-input" 
-                      value={form.date} 
-                      onChange={e => setForm({ ...form, date: e.target.value })} 
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Time</label>
-                    <input 
-                      type="time" 
-                      className="form-input" 
-                      value={form.time} 
-                      onChange={e => setForm({ ...form, time: e.target.value })} 
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Duration (Min)</label>
-                    <select 
-                      className="form-select"
-                      value={form.durationMinutes}
-                      onChange={e => setForm({ ...form, durationMinutes: Number(e.target.value) })}
-                    >
-                      <option value="15">15 min</option>
-                      <option value="30">30 min</option>
-                      <option value="45">45 min</option>
-                      <option value="60">60 min</option>
-                      <option value="90">90 min</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Chief Complaint / Planned Treatment</label>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    placeholder="e.g. Crown cementation, Scaling, Emergency consultation..."
-                    value={form.chiefComplaint}
-                    onChange={e => setForm({ ...form, chiefComplaint: e.target.value })}
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: 4 }}>Time</label>
+                  <input
+                    type="time"
+                    value={form.time}
+                    onChange={e => setForm({ ...form, time: e.target.value })}
+                    style={{ width: '100%', padding: '0.55rem', borderRadius: 8, border: '1px solid #cbd5e1' }}
                   />
                 </div>
               </div>
 
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowBookingModal(false)}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: 4 }}>Operatory Chair</label>
+                  <select
+                    value={form.operatoryChair}
+                    onChange={e => setForm({ ...form, operatoryChair: e.target.value })}
+                    style={{ width: '100%', padding: '0.55rem', borderRadius: 8, border: '1px solid #cbd5e1' }}
+                  >
+                    {chairs.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: 4 }}>Duration</label>
+                  <select
+                    value={form.durationMinutes}
+                    onChange={e => setForm({ ...form, durationMinutes: Number(e.target.value) })}
+                    style={{ width: '100%', padding: '0.55rem', borderRadius: 8, border: '1px solid #cbd5e1' }}
+                  >
+                    <option value={30}>30 min</option>
+                    <option value={45}>45 min</option>
+                    <option value={60}>60 min</option>
+                    <option value={90}>90 min</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: 4 }}>
+                  Planned Clinical Procedure / Complaint
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Root canal treatment, tooth 46"
+                  value={form.chiefComplaint}
+                  onChange={e => setForm({ ...form, chiefComplaint: e.target.value })}
+                  style={{ width: '100%', padding: '0.55rem', borderRadius: 8, border: '1px solid #cbd5e1' }}
+                />
+              </div>
+
+              {bookingError && (
+                <div style={{ color: '#b91c1c', fontSize: '0.78rem', background: '#fef2f2', padding: '6px 10px', borderRadius: 6 }}>
+                  {bookingError}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
+                <button
+                  type="button"
+                  className="btn-outline-pill"
+                  onClick={() => setShowBookingModal(false)}
+                >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  <span>Confirm Schedule</span>
+                <button type="submit" className="btn-teal-primary">
+                  Confirm Booking
                 </button>
               </div>
             </form>

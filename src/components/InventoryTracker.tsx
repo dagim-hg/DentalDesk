@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { useDental } from '../context/DentalContext';
 import { 
   Package, AlertTriangle, Plus, Minus, Search, 
-  CheckCircle, ArrowUpDown 
+  CheckCircle2, ArrowUpDown 
 } from 'lucide-react';
 
 export const InventoryTracker: React.FC = () => {
-  const { inventory, updateInventoryStock, currentUser, hasPermission } = useDental();
+  const { inventory, updateInventoryStock } = useDental();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
 
@@ -21,45 +21,67 @@ export const InventoryTracker: React.FC = () => {
   const lowStockCount = inventory.filter(i => i.currentStock <= i.reorderThreshold).length;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {/* Top Inventory Metrics */}
+    <div style={{ maxWidth: 1380, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+      
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+            Clinical Supplies & Inventory
+          </h1>
+          <p style={{ fontSize: '0.82rem', color: '#64748b', margin: '4px 0 0' }}>
+            Chairside consumable tracking, reorder alerts, and dental materials management.
+          </p>
+        </div>
+      </div>
+
+      {/* Top Metrics */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-        <div className="card-panel" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ width: 44, height: 44, borderRadius: 'var(--radius-md)', background: 'rgba(14, 165, 233, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Package size={22} color="var(--primary)" />
+        <div className="operatory-card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem 1.25rem' }}>
+          <div style={{ width: 44, height: 44, borderRadius: 10, background: '#e6f3f4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#005963' }}>
+            <Package size={22} />
           </div>
           <div>
-            <div style={{ fontSize: '1.4rem', fontWeight: 800 }}>{inventory.length}</div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Tracked Dental SKU Items</div>
+            <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#0f172a' }}>{inventory.length}</div>
+            <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>Tracked Dental SKU Items</div>
           </div>
         </div>
 
-        <div className="card-panel" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ width: 44, height: 44, borderRadius: 'var(--radius-md)', background: 'rgba(244, 63, 94, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <AlertTriangle size={22} color="var(--danger)" />
+        <div className="operatory-card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem 1.25rem' }}>
+          <div style={{ width: 44, height: 44, borderRadius: 10, background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#b91c1c' }}>
+            <AlertTriangle size={22} />
           </div>
           <div>
-            <div style={{ fontSize: '1.4rem', fontWeight: 800 }}>{lowStockCount}</div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Low Stock Reorder Alerts</div>
+            <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#b91c1c' }}>{lowStockCount}</div>
+            <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>Low Stock Reorder Alerts</div>
           </div>
         </div>
       </div>
 
       {/* Main Stock Table */}
-      <div className="card-panel">
-        <div className="panel-header" style={{ flexWrap: 'wrap', gap: '1rem' }}>
-          <div className="panel-title">
-            <Package size={18} color="var(--primary)" />
-            <span>Dental Supplies & Operatory Stock</span>
+      <div className="operatory-card" style={{ padding: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Package size={18} color="#005963" />
+            <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+              Dental Consumables & Stock Levels
+            </h3>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <div style={{ position: 'relative' }}>
-              <Search size={15} color="var(--text-muted)" style={{ position: 'absolute', left: 10, top: 10 }} />
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '0.45rem 0.75rem',
+              background: '#fafbfa',
+              border: '1px solid #cbd5e1',
+              borderRadius: 8
+            }}>
+              <Search size={14} color="#64748b" />
               <input 
                 type="text" 
-                className="form-input" 
-                style={{ paddingLeft: '2rem', padding: '0.4rem 0.6rem 0.4rem 2rem', fontSize: '0.82rem' }}
+                style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.8rem', width: 180, color: '#0f172a' }}
                 placeholder="Search SKU or item..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
@@ -67,8 +89,7 @@ export const InventoryTracker: React.FC = () => {
             </div>
 
             <select 
-              className="form-select"
-              style={{ fontSize: '0.82rem', padding: '0.4rem 0.8rem' }}
+              style={{ fontSize: '0.8rem', padding: '0.45rem 0.75rem', borderRadius: 8, border: '1px solid #cbd5e1', background: '#ffffff', color: '#0f172a' }}
               value={selectedCategory}
               onChange={e => setSelectedCategory(e.target.value)}
             >
@@ -82,72 +103,72 @@ export const InventoryTracker: React.FC = () => {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '0.75rem 1rem' }}>SKU</th>
-                <th style={{ padding: '0.75rem 1rem' }}>Item Description</th>
-                <th style={{ padding: '0.75rem 1rem' }}>Category</th>
-                <th style={{ padding: '0.75rem 1rem' }}>Unit Cost</th>
-                <th style={{ padding: '0.75rem 1rem' }}>In Stock</th>
-                <th style={{ padding: '0.75rem 1rem' }}>Status</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Quick Adjust</th>
+              <tr style={{ borderBottom: '1px solid #eef0e9', color: '#64748b' }}>
+                <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.75rem', fontWeight: 600 }}>SKU</th>
+                <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.75rem', fontWeight: 600 }}>Item Description</th>
+                <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.75rem', fontWeight: 600 }}>Category</th>
+                <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.75rem', fontWeight: 600 }}>Unit Cost</th>
+                <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.75rem', fontWeight: 600 }}>In Stock</th>
+                <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.75rem', fontWeight: 600 }}>Status</th>
+                <th style={{ padding: '0.65rem 0.85rem', fontSize: '0.75rem', fontWeight: 600, textAlign: 'right' }}>Quick Adjust</th>
               </tr>
             </thead>
             <tbody>
               {filteredItems.map(item => {
                 const isLow = item.currentStock <= item.reorderThreshold;
                 return (
-                  <tr key={item.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)' }}>
-                    <td style={{ padding: '0.85rem 1rem', fontFamily: 'var(--font-mono)', color: 'var(--primary)', fontWeight: 600 }}>
+                  <tr key={item.id} style={{ borderBottom: '1px solid #f1f3ee' }}>
+                    <td style={{ padding: '0.75rem 0.85rem', fontFamily: 'monospace', color: '#005963', fontWeight: 700 }}>
                       {item.sku}
                     </td>
-                    <td style={{ padding: '0.85rem 1rem' }}>
-                      <strong style={{ color: '#fff' }}>{item.name}</strong>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    <td style={{ padding: '0.75rem 0.85rem' }}>
+                      <strong style={{ color: '#0f172a' }}>{item.name}</strong>
+                      <div style={{ fontSize: '0.73rem', color: '#64748b' }}>
                         Supplier: {item.supplierName} • {item.unitOfMeasure}
                       </div>
                     </td>
-                    <td style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)' }}>
+                    <td style={{ padding: '0.75rem 0.85rem', color: '#475569' }}>
                       {item.category}
                     </td>
-                    <td style={{ padding: '0.85rem 1rem', color: '#fff' }}>
+                    <td style={{ padding: '0.75rem 0.85rem', fontWeight: 600, color: '#0f172a' }}>
                       ${item.unitCost.toFixed(2)}
                     </td>
-                    <td style={{ padding: '0.85rem 1rem' }}>
-                      <span style={{ fontSize: '1rem', fontWeight: 800, color: isLow ? 'var(--danger)' : '#fff' }}>
+                    <td style={{ padding: '0.75rem 0.85rem' }}>
+                      <span style={{ fontSize: '1rem', fontWeight: 800, color: isLow ? '#b91c1c' : '#0f172a' }}>
                         {item.currentStock}
                       </span>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      <span style={{ fontSize: '0.73rem', color: '#64748b' }}>
                         {' '}/ min {item.reorderThreshold}
                       </span>
                     </td>
-                    <td style={{ padding: '0.85rem 1rem' }}>
+                    <td style={{ padding: '0.75rem 0.85rem' }}>
                       {isLow ? (
-                        <span style={{ background: 'var(--danger-bg)', color: 'var(--danger)', fontSize: '0.72rem', padding: '0.2rem 0.55rem', borderRadius: 'var(--radius-full)', fontWeight: 700 }}>
+                        <span style={{ background: '#fee2e2', color: '#b91c1c', fontSize: '0.7rem', padding: '2px 8px', borderRadius: 9999, fontWeight: 700 }}>
                           REORDER NEEDED
                         </span>
                       ) : (
-                        <span style={{ background: 'var(--success-bg)', color: 'var(--success)', fontSize: '0.72rem', padding: '0.2rem 0.55rem', borderRadius: 'var(--radius-full)', fontWeight: 700 }}>
+                        <span style={{ background: '#ecfdf5', color: '#059669', fontSize: '0.7rem', padding: '2px 8px', borderRadius: 9999, fontWeight: 700 }}>
                           ADEQUATE
                         </span>
                       )}
                     </td>
-                    <td style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>
+                    <td style={{ padding: '0.75rem 0.85rem', textAlign: 'right' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
                         <button 
-                          className="btn btn-secondary btn-sm"
-                          style={{ padding: '0.25rem 0.5rem' }}
+                          className="btn-outline-pill"
+                          style={{ padding: '0.25rem 0.5rem', borderRadius: 6 }}
                           onClick={() => updateInventoryStock(item.id, Math.max(0, item.currentStock - 1))}
                           title="Reduce 1 unit (used in operatory)"
                         >
-                          <Minus size={13} />
+                          <Minus size={12} />
                         </button>
                         <button 
-                          className="btn btn-secondary btn-sm"
-                          style={{ padding: '0.25rem 0.5rem' }}
+                          className="btn-outline-pill"
+                          style={{ padding: '0.25rem 0.5rem', borderRadius: 6 }}
                           onClick={() => updateInventoryStock(item.id, item.currentStock + 1)}
                           title="Add 1 received unit"
                         >
-                          <Plus size={13} />
+                          <Plus size={12} />
                         </button>
                       </div>
                     </td>
